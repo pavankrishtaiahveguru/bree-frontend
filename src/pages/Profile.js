@@ -1,0 +1,669 @@
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { Helmet } from "react-helmet-async";
+import { toast } from "sonner";
+import axios from "axios";
+import useOrdersSync from "@/hooks/useOrdersSync";
+import {
+  User,
+  MapPin,
+  Package,
+  Edit2,
+  Save,
+  X,
+  Plus,
+  Trash2,
+  CheckCircle,
+  Loader2,
+  LogOut,
+} from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+const API = `${process.env.REACT_APP_BACKEND_URL || "http://localhost:4000"}/api`;
+
+const normalizeStatus = (status) => {
+  if (!status) return 'pending';
+  const lower = String(status).toLowerCase();
+  if (['processing', 'shipped', 'out_for_delivery', 'dispatched'].includes(lower)) return 'dispatched';
+  if (['pending', 'confirmed', 'delivered', 'cancelled'].includes(lower)) return lower;
+  return lower;
+};
+
+const TABS = [
+  { id: "profile", label: "Profile", icon: User },
+  { id: "addresses", label: "Addresses", icon: MapPin },
+  { id: "orders", label: "Orders", icon: Package },
+];
+
+// ─── Profile Tab ─────────────────────────────────────────────────────────────
+function ProfileTab({ user }) {
+  const [editing, setEditing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [profileData, setProfileData] = useState(null);
+  const [form, setForm] = useState({ name: "", email: "", phone: "" });
+
+  useEffect(() => {
+    const fetch = async () => {
+      try {
+        const res = await axios.get(`${API}/profile`, {
+          withCredentials: true,
+        });
+        setProfileData(res.data);
+        setForm({
+          name: res.data.name || "",
+          email: res.data.email || "",
+          phone: res.data.phone || "",
+        });
+      } catch {
+        // Use auth context user as fallback
+        if (user) {
+          setProfileData(user);
+          setForm({
+            name: user.name || "",
+            email: user.email || "",
+            phone: user.phone || "",
+          });
+        }
+      }
+    };
+    fetch();
+  }, [user]);
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      await axios.put(`${API}/profile`, form, { withCredentials: true });
+      setProfileData((prev) => ({ ...prev, ...form }));
+      setEditing(false);
+      toast.success("Profile updated!");
+    } catch (err) {
+      toast.error("Failed to update profile.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!profileData) {
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 className="w-8 h-8 animate-spin text-bree-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-lg">
+      <div className="flex items-center gap-4 mb-8">
+        {profileData.picture ? (
+          <img
+            src={profileData.picture}
+            alt=""
+            className="w-16 h-16 rounded-full object-cover"
+          />
+        ) : (
+          <div className="w-16 h-16 rounded-full bg-bree-accent/40 flex items-center justify-center">
+            <User className="w-8 h-8 text-bree-primary" />
+          </div>
+        )}
+        <div>
+          <h2 className="font-outfit text-xl font-semibold text-bree-text-primary">
+            {profileData.name}
+          </h2>
+          <p className="text-bree-text-secondary text-sm">
+            {profileData.email}
+          </p>
+        </div>
+      </div>
+
+      {editing ? (
+        <div className="space-y-4">
+          <div>
+            <Label>Name</Label>
+            <Input
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label>Email</Label>
+            <Input
+              value={form.email}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, email: e.target.value }))
+              }
+              className="mt-1"
+              type="email"
+            />
+          </div>
+          <div>
+            <Label>Phone</Label>
+            <Input
+              value={form.phone}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, phone: e.target.value }))
+              }
+              className="mt-1"
+              type="tel"
+              placeholder="+91 XXXXX XXXXX"
+            />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button
+              onClick={handleSave}
+              disabled={loading}
+              className="bg-bree-primary hover:bg-bree-primary-hover text-white"
+            >
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Save className="w-4 h-4 mr-2" />
+              )}
+              Save Changes
+            </Button>
+            <Button variant="outline" onClick={() => setEditing(false)}>
+              <X className="w-4 h-4 mr-2" />
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {[
+            { label: "Name", value: profileData.name },
+            { label: "Email", value: profileData.email },
+            { label: "Phone", value: profileData.phone || "—" },
+          ].map(({ label, value }) => (
+            <div
+              key={label}
+              className="flex flex-col gap-1 p-4 bg-bree-bg rounded-xl"
+            >
+              <span className="text-xs text-bree-text-secondary uppercase tracking-wide">
+                {label}
+              </span>
+              <span className="font-medium text-bree-text-primary">
+                {value}
+              </span>
+            </div>
+          ))}
+          <Button
+            onClick={() => setEditing(true)}
+            variant="outline"
+            className="mt-2"
+          >
+            <Edit2 className="w-4 h-4 mr-2" />
+            Edit Profile
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Addresses Tab ────────────────────────────────────────────────────────────
+function AddressesTab() {
+  const [addresses, setAddresses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState({
+    label: "",
+    line1: "",
+    line2: "",
+    city: "",
+    state: "",
+    pincode: "",
+    country: "India",
+  });
+
+  const fetchAddresses = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API}/addresses`, {
+        withCredentials: true,
+      });
+      setAddresses(res.data);
+    } catch {
+      toast.error("Could not load addresses.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAddresses();
+  }, [fetchAddresses]);
+
+  const resetForm = () => {
+    setForm({
+      label: "",
+      line1: "",
+      line2: "",
+      city: "",
+      state: "",
+      pincode: "",
+      country: "India",
+    });
+    setEditingId(null);
+    setShowForm(false);
+  };
+
+  const handleSubmit = async () => {
+    try {
+      if (editingId) {
+        await axios.put(`${API}/addresses/${editingId}`, form, {
+          withCredentials: true,
+        });
+        toast.success("Address updated!");
+      } else {
+        await axios.post(`${API}/addresses`, form, { withCredentials: true });
+        toast.success("Address added!");
+      }
+      fetchAddresses();
+      resetForm();
+    } catch {
+      toast.error("Failed to save address.");
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await axios.delete(`${API}/addresses/${id}`, { withCredentials: true });
+      toast.success("Address removed.");
+      fetchAddresses();
+    } catch {
+      toast.error("Could not delete address.");
+    }
+  };
+
+  const handleSetDefault = async (id) => {
+    try {
+      await axios.put(
+        `${API}/addresses/${id}/default`,
+        {},
+        { withCredentials: true },
+      );
+      toast.success("Default address updated.");
+      fetchAddresses();
+    } catch {
+      toast.error("Could not set default.");
+    }
+  };
+
+  const startEdit = (addr) => {
+    setForm({
+      label: addr.label || "",
+      line1: addr.line1 || "",
+      line2: addr.line2 || "",
+      city: addr.city || "",
+      state: addr.state || "",
+      pincode: addr.pincode || "",
+      country: addr.country || "India",
+    });
+    setEditingId(addr.id);
+    setShowForm(true);
+  };
+
+  if (loading)
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 className="w-8 h-8 animate-spin text-bree-primary" />
+      </div>
+    );
+
+  return (
+    <div className="max-w-lg">
+      <div className="space-y-4 mb-6">
+        {addresses.length === 0 && !showForm && (
+          <p className="text-bree-text-secondary py-8 text-center">
+            No addresses saved yet.
+          </p>
+        )}
+        {addresses.map((addr) => (
+          <div
+            key={addr.id}
+            className="p-4 bg-bree-bg rounded-xl border border-bree-border"
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-medium text-bree-text-primary">
+                    {addr.label || "Home"}
+                  </span>
+                  {addr.is_default && (
+                    <span className="text-xs bg-bree-accent/40 text-bree-primary px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" /> Default
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-bree-text-secondary">
+                  {addr.line1}
+                  {addr.line2 ? `, ${addr.line2}` : ""}
+                  <br />
+                  {addr.city}, {addr.state} — {addr.pincode}
+                  <br />
+                  {addr.country}
+                </p>
+              </div>
+              <div className="flex gap-2 ml-4 shrink-0">
+                {!addr.is_default && (
+                  <button
+                    onClick={() => handleSetDefault(addr.id)}
+                    className="text-xs text-bree-primary hover:underline"
+                  >
+                    Set Default
+                  </button>
+                )}
+                <button
+                  onClick={() => startEdit(addr)}
+                  className="p-1.5 hover:bg-white rounded-lg transition-colors"
+                >
+                  <Edit2 className="w-4 h-4 text-bree-text-secondary" />
+                </button>
+                <button
+                  onClick={() => handleDelete(addr.id)}
+                  className="p-1.5 hover:bg-white rounded-lg transition-colors"
+                >
+                  <Trash2 className="w-4 h-4 text-red-400" />
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {showForm ? (
+        <div className="p-4 bg-white rounded-xl border border-bree-border space-y-3">
+          <h3 className="font-outfit font-semibold text-bree-text-primary">
+            {editingId ? "Edit Address" : "New Address"}
+          </h3>
+          {[
+            { key: "label", label: "Label (Home, Work…)", placeholder: "Home" },
+            {
+              key: "line1",
+              label: "Address Line 1",
+              placeholder: "123 Main Street",
+            },
+            {
+              key: "line2",
+              label: "Address Line 2 (optional)",
+              placeholder: "Apartment, suite…",
+            },
+            { key: "city", label: "City", placeholder: "Mumbai" },
+            { key: "state", label: "State", placeholder: "Maharashtra" },
+            { key: "pincode", label: "PIN Code", placeholder: "400001" },
+            { key: "country", label: "Country", placeholder: "India" },
+          ].map(({ key, label, placeholder }) => (
+            <div key={key}>
+              <Label className="text-xs">{label}</Label>
+              <Input
+                value={form[key]}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, [key]: e.target.value }))
+                }
+                placeholder={placeholder}
+                className="mt-1"
+              />
+            </div>
+          ))}
+          <div className="flex gap-3 pt-1">
+            <Button
+              onClick={handleSubmit}
+              className="bg-bree-primary hover:bg-bree-primary-hover text-white"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              {editingId ? "Update" : "Add Address"}
+            </Button>
+            <Button variant="outline" onClick={resetForm}>
+              <X className="w-4 h-4 mr-2" />
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button onClick={() => setShowForm(true)} variant="outline">
+          <Plus className="w-4 h-4 mr-2" />
+          Add Address
+        </Button>
+      )}
+    </div>
+  );
+}
+
+// ─── Orders Tab ───────────────────────────────────────────────────────────────
+function OrdersTab() {
+  const navigate = useNavigate();
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetch = async () => {
+      try {
+        const res = await axios.get(`${API}/orders`, { withCredentials: true });
+        setOrders(res.data);
+      } catch {
+        toast.error("Could not load orders.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetch();
+  }, []);
+
+  // update local orders when an order update arrives
+  useOrdersSync((updated) => {
+    setOrders((prev) =>
+      prev.map((o) => (o.id === updated.id ? { ...o, ...updated } : o)),
+    );
+  });
+
+  if (loading)
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 className="w-8 h-8 animate-spin text-bree-primary" />
+      </div>
+    );
+
+  if (orders.length === 0) {
+    return (
+      <div className="text-center py-16">
+        <Package className="w-12 h-12 text-bree-border mx-auto mb-4" />
+        <p className="text-bree-text-secondary">
+          No orders yet. Start your wellness journey!
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl space-y-4">
+      {orders.map((order) => (
+        <div
+          key={order.id}
+          className="p-4 bg-bree-bg rounded-xl border border-bree-border"
+        >
+          <div className="flex justify-between items-start mb-3">
+            <div>
+              <span className="text-xs text-bree-text-secondary uppercase tracking-wide">
+                Order
+              </span>
+              <p className="font-outfit font-semibold text-bree-text-primary">
+                #{order.id?.slice(-8) || order.id}
+              </p>
+            </div>
+            <div className="flex flex-col items-end gap-2">
+              {(() => {
+                const orderStatus = normalizeStatus(order.status || order.order_status);
+                return (
+                  <span
+                    className={`text-xs px-3 py-1 rounded-full font-medium ${
+                      orderStatus === 'delivered'
+                        ? 'bg-green-100 text-green-700'
+                        : orderStatus === 'dispatched'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : orderStatus === 'confirmed'
+                            ? 'bg-sky-100 text-sky-700'
+                            : orderStatus === 'cancelled'
+                              ? 'bg-red-100 text-red-600'
+                              : 'bg-gray-100 text-gray-600'
+                    }`}
+                  >
+                    {orderStatus}
+                  </span>
+                );
+              })()}
+              <div className="flex items-center gap-2">
+                {/* Track Order */}
+                <button
+                  onClick={() => navigate(`/order/${order.id}/tracking`)}
+                  className="text-sm bg-bree-primary text-white px-3 py-1 rounded-full"
+                >
+                  Track Order
+                </button>
+                {/* View Order Details */}
+                {/* <button
+                  // onClick={() => navigate(`/order/${order.id}`)}
+                  className="text-sm border border-bree-border px-3 py-1 rounded-full hover:bg-bree-bg transition-all duration-200"
+                >
+                  View Details
+                </button> */}
+              </div>
+            </div>
+          </div>
+          {order.items?.map((item, i) => (
+            <div
+              key={i}
+              className="flex justify-between text-sm py-1 border-t border-bree-border/50 first:border-0"
+            >
+              <span className="text-bree-text-secondary">
+                {item.name} × {item.quantity}
+              </span>
+              <span className="font-medium text-bree-text-primary">
+                ₹{item.price}
+              </span>
+            </div>
+          ))}
+          <div className="flex justify-between mt-3 pt-3 border-t border-bree-border font-semibold">
+            <span className="text-bree-text-secondary">Total</span>
+            <span className="text-bree-primary font-outfit">
+              ₹{order.total}
+            </span>
+          </div>
+          {order.created_at && (
+            <p className="text-xs text-bree-text-secondary mt-2">
+              {new Date(order.created_at).toLocaleDateString("en-IN", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Main Profile Page ────────────────────────────────────────────────────────
+const Profile = () => {
+  const { user, loading, logout } = useAuth();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState("profile");
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate("/login", { replace: true });
+    }
+  }, [user, loading, navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-bree-bg">
+        <Loader2 className="w-8 h-8 animate-spin text-bree-primary" />
+      </div>
+    );
+  }
+
+  if (!user) return null;
+
+  return (
+    <>
+      <Helmet>
+        <title>My Profile — BREE Wellness</title>
+        <meta
+          name="description"
+          content="Manage your BREE account — update profile, addresses, and view your order history."
+        />
+      </Helmet>
+
+      <div className="pt-24 min-h-screen bg-bree-bg">
+        <div className="max-w-5xl mx-auto px-6 md:px-12 py-12">
+          {/* Header */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="flex items-center justify-between mb-10"
+          >
+            <div>
+              <p className="text-xs tracking-[0.2em] uppercase font-semibold text-bree-primary">
+                My Account
+              </p>
+              <h1 className="font-outfit text-3xl md:text-4xl font-light text-bree-text-primary mt-1">
+                Welcome, {user.name?.split(" ")[0]}
+              </h1>
+            </div>
+            <button
+              onClick={async () => {
+                await logout();
+                navigate("/");
+              }}
+              className="flex items-center gap-2 px-4 py-2 border border-bree-border rounded-full text-sm text-bree-text-secondary hover:bg-white transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Sign Out</span>
+            </button>
+          </motion.div>
+
+          {/* Tabs */}
+          <div className="flex gap-1 bg-white p-1 rounded-2xl border border-bree-border mb-8 max-w-sm">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-sm font-medium transition-all ${
+                  activeTab === tab.id
+                    ? "bg-bree-primary text-white shadow-sm"
+                    : "text-bree-text-secondary hover:text-bree-text-primary"
+                }`}
+              >
+                <tab.icon className="w-4 h-4" />
+                <span className="hidden sm:inline">{tab.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Tab Content */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.25 }}
+            >
+              {activeTab === "profile" && <ProfileTab user={user} />}
+              {activeTab === "addresses" && <AddressesTab />}
+              {activeTab === "orders" && <OrdersTab />}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </div>
+    </>
+  );
+};
+
+export default Profile;

@@ -1,0 +1,1076 @@
+import { useState, useEffect, useCallback, useRef, memo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Search,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  ArrowUpDown,
+  Package,
+  CheckSquare,
+  RefreshCw,
+  ChevronDown,
+  SlidersHorizontal,
+} from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import AdminLayout from "@/components/admin/AdminLayout";
+import axios from "axios";
+import { toast } from "sonner";
+import useOrdersSync from "@/hooks/useOrdersSync";
+
+const API = `${process.env.REACT_APP_BACKEND_URL || "http://localhost:4000"}/api/admin`;
+const AUTH = () => ({ withCredentials: true });
+const PAGE_SIZE = 10;
+
+const normalizeStatus = (status) => {
+  if (!status) return "pending";
+  const lower = String(status).toLowerCase();
+  if (["processing", "shipped", "out_for_delivery"].includes(lower))
+    return "dispatched";
+  if (
+    ["pending", "confirmed", "dispatched", "delivered", "cancelled"].includes(
+      lower,
+    )
+  )
+    return lower;
+  return lower;
+};
+
+const ORDER_STATUSES = ["pending", "confirmed", "dispatched", "delivered"];
+
+const DATE_RANGES = [
+  { label: "All Time", value: "all" },
+  { label: "Today", value: "today" },
+  { label: "Last 7 Days", value: "7days" },
+  { label: "Last 30 Days", value: "30days" },
+  { label: "Last 90 Days", value: "90days" },
+];
+
+const STATUS_COLORS = {
+  pending: "bg-yellow-100 text-yellow-700 border-yellow-200",
+  confirmed: "bg-sky-100 text-sky-700 border-sky-200",
+  dispatched: "bg-purple-100 text-purple-700 border-purple-200",
+  delivered: "bg-green-100 text-green-700 border-green-200",
+  cancelled: "bg-red-100 text-red-500 border-red-200",
+};
+
+const ORDER_TRANSITIONS = {
+  pending: ["pending", "confirmed"],
+  confirmed: ["confirmed", "dispatched"],
+  dispatched: ["dispatched", "delivered"],
+  delivered: ["delivered"],
+  cancelled: ["cancelled"],
+};
+
+const getCommonBulkStatuses = (orders, selectedIds) => {
+  const selectedOrders = orders.filter((o) => selectedIds.includes(o.id));
+  if (!selectedOrders.length) return ORDER_STATUSES;
+
+  const intersection = selectedOrders
+    .map(
+      (o) =>
+        new Set(
+          ORDER_TRANSITIONS[normalizeStatus(o.order_status)] || [
+            normalizeStatus(o.order_status),
+          ],
+        ),
+    )
+    .reduce(
+      (common, statusSet) => {
+        return new Set([...common].filter((status) => statusSet.has(status)));
+      },
+      new Set(
+        ORDER_TRANSITIONS[normalizeStatus(selectedOrders[0].order_status)] || [
+          normalizeStatus(selectedOrders[0].order_status),
+        ],
+      ),
+    );
+
+  return [...intersection].length ? [...intersection] : ORDER_STATUSES;
+};
+
+const PAYMENT_COLORS = {
+  paid: "bg-green-100  text-green-700",
+  pending: "bg-yellow-100 text-yellow-700",
+  failed: "bg-red-100    text-red-500",
+};
+
+/* ── date filter helper ───────────────────────────────────────────────────── */
+// FIX 6: clamp both bounds correctly so "today" captures all timestamps within the day
+function isInRange(dateStr, range) {
+  if (range === "all") return true;
+  const date = new Date(dateStr);
+  const start = new Date();
+  const end = new Date();
+
+  if (range === "today") {
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+  } else if (range === "7days") {
+    start.setDate(start.getDate() - 7);
+    start.setHours(0, 0, 0, 0);
+  } else if (range === "30days") {
+    start.setDate(start.getDate() - 30);
+    start.setHours(0, 0, 0, 0);
+  } else if (range === "90days") {
+    start.setDate(start.getDate() - 90);
+    start.setHours(0, 0, 0, 0);
+  }
+
+  return date >= start && date <= end;
+}
+
+/* ── small reusable dropdown ──────────────────────────────────────────────── */
+function FilterDropdown({ label, value, options, onChange, colorMap }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const selected = options.find((o) => o.value === value);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={`flex items-center gap-2 h-10 px-3.5 rounded-xl border text-sm font-medium transition cursor-pointer whitespace-nowrap
+          ${
+            value !== "all" && value !== ""
+              ? "bg-bree-primary border-bree-primary text-white"
+              : "bg-white border-bree-border text-bree-text-secondary hover:border-bree-primary hover:text-bree-text-primary"
+          }`}
+      >
+        <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
+        {selected ? selected.label : label}
+        <ChevronDown
+          className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.15 }}
+            className="absolute left-0 top-12 z-30 bg-white border border-bree-border rounded-2xl shadow-xl py-1.5 min-w-[160px]"
+          >
+            {options.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => {
+                  onChange(opt.value);
+                  setOpen(false);
+                }}
+                className={`w-full flex items-center gap-2.5 px-4 py-2 text-sm text-left transition cursor-pointer
+                  ${
+                    value === opt.value
+                      ? "bg-bree-bg text-bree-primary font-semibold"
+                      : "text-bree-text-primary hover:bg-bree-bg/60"
+                  }`}
+              >
+                {colorMap && opt.value !== "all" && (
+                  <span
+                    className={`w-2 h-2 rounded-full inline-block flex-shrink-0
+                    ${
+                      opt.value === "delivered"
+                        ? "bg-green-500"
+                        : opt.value === "pending"
+                          ? "bg-yellow-400"
+                          : opt.value === "confirmed"
+                            ? "bg-sky-500"
+                            : opt.value === "dispatched"
+                              ? "bg-purple-700 text-purple-700"
+                              : opt.value === "cancelled"
+                                ? "bg-red-500"
+                                : "bg-slate-300"
+                    }`}
+                  />
+                )}
+                {opt.label}
+                {value === opt.value && (
+                  <span className="ml-auto text-bree-primary">✓</span>
+                )}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/* ── order-detail modal ───────────────────────────────────────────────────── */
+// FIX 1: Removed AnimatePresence from inside the modal — it belongs at the call site.
+// FIX 7: key={order.id} added at call site so switching orders re-mounts cleanly.
+const OrderModal = ({ order, onClose, onStatusChange }) => {
+  if (!order) return null;
+
+  const orderStatus = normalizeStatus(order.order_status || order.status);
+  const timeline = [
+    { label: "Order Placed", done: true },
+    { label: "Payment Confirmed", done: order.payment_status === "paid" },
+    {
+      label: "Dispatched",
+      done: [
+        "processing",
+        "shipped",
+        "out_for_delivery",
+        "dispatched",
+        "delivered",
+      ].includes(normalizeStatus(order.order_status || order.status)),
+    },
+    { label: "Delivered", done: orderStatus === "delivered" },
+  ];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+      >
+        <div className="px-6 py-5 border-b border-bree-border flex items-center justify-between sticky top-0 bg-white z-10 rounded-t-3xl">
+          <div>
+            <h3 className="font-outfit font-semibold text-bree-text-primary text-lg">
+              Order #{order.id}
+            </h3>
+            <p className="text-bree-text-secondary text-xs mt-0.5">
+              {new Date(order.created_at).toLocaleString("en-IN")}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl hover:bg-bree-bg transition-colors cursor-pointer"
+          >
+            <X className="w-5 h-5 text-bree-text-secondary" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            {[
+              ["Customer", order.customer_name],
+              ["Mobile", order.mobile_number],
+              ["Email", order.email],
+              ["Transaction ID", order.transaction_id],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <p className="text-xs text-bree-text-secondary mb-1">{label}</p>
+                <p className="text-sm font-medium text-bree-text-primary">
+                  {value}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="p-4 bg-bree-bg rounded-2xl">
+            <p className="text-xs text-bree-text-secondary mb-3 font-medium uppercase tracking-wide">
+              Product Details
+            </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-bree-text-primary text-sm">
+                  {order.product_name ||
+                    order.items?.[0]?.name ||
+                    "Unknown product"}
+                </p>
+                <p className="text-bree-text-secondary text-xs mt-0.5">
+                  Qty: {order.quantity ?? order.items?.[0]?.quantity ?? "—"}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="font-semibold text-bree-text-primary">
+                  ₹{Number(order.amount).toLocaleString()}
+                </p>
+                <span
+                  className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${
+                    PAYMENT_COLORS[order.payment_status] ||
+                    "bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  {order.payment_status}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs text-bree-text-secondary mb-2 font-medium uppercase tracking-wide">
+              Shipping Address
+            </p>
+            <p className="text-sm text-bree-text-primary bg-bree-bg rounded-xl p-3">
+              {order.shipping_address}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs text-bree-text-secondary mb-2 font-medium uppercase tracking-wide">
+              Update Order Status
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {ORDER_STATUSES.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => onStatusChange([order.id], s)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border capitalize transition cursor-pointer
+                    ${
+                      order.order_status === s
+                        ? STATUS_COLORS[s] +
+                          " ring-2 ring-offset-1 ring-bree-primary"
+                        : "bg-white border-bree-border text-bree-text-secondary hover:border-bree-primary hover:text-bree-primary"
+                    }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs text-bree-text-secondary mb-3 font-medium uppercase tracking-wide">
+              Order Timeline
+            </p>
+            <div className="space-y-3">
+              {timeline.map(({ label, done }, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <div
+                    className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold
+                    ${
+                      done
+                        ? "bg-bree-primary text-white"
+                        : "bg-bree-bg border-2 border-bree-border text-bree-text-secondary"
+                    }`}
+                  >
+                    {done ? "✓" : i + 1}
+                  </div>
+                  <p
+                    className={`text-sm font-medium ${
+                      done
+                        ? "text-bree-text-primary"
+                        : "text-bree-text-secondary"
+                    }`}
+                  >
+                    {label}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+/* ── bulk bar ─────────────────────────────────────────────────────────────── */
+const BulkBar = ({ count, onApply, onClear, availableStatuses }) => {
+  const [status, setStatus] = useState("");
+  const hasSelection = count > 0;
+  const selectableStatuses = availableStatuses.length
+    ? availableStatuses
+    : ORDER_STATUSES;
+  return (
+    <div className="flex flex-wrap items-center gap-3 bg-[#EFF6FF] border border-[#BFDBFE] px-5 py-3 rounded-2xl">
+      <div className="flex items-center gap-2">
+        <div
+          className={`w-6 h-6 rounded-md flex items-center justify-center transition ${
+            hasSelection ? "bg-[#2563EB]" : "bg-[#BFDBFE]"
+          }`}
+        >
+          <CheckSquare className="w-3.5 h-3.5 text-white" />
+        </div>
+        <span
+          className={`text-sm font-semibold transition ${
+            hasSelection ? "text-[#1E40AF]" : "text-[#93C5FD]"
+          }`}
+        >
+          {hasSelection
+            ? `${count} order${count > 1 ? "s" : ""} selected`
+            : "Select orders to bulk update"}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2 ml-auto flex-wrap">
+        <select
+          value={status}
+          disabled={!hasSelection}
+          onChange={(e) => setStatus(e.target.value)}
+          className="text-sm bg-white border border-[#BFDBFE] text-[#1E40AF] font-medium rounded-lg px-3 py-1.5 outline-none focus:border-[#2563EB] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+        >
+          <option value="" disabled className="text-slate-400">
+            Set status…
+          </option>
+          {selectableStatuses.map((s) => (
+            <option key={s} value={s} className="text-slate-800 capitalize">
+              {s}
+            </option>
+          ))}
+        </select>
+
+        <button
+          disabled={!status || !hasSelection}
+          onClick={() => {
+            onApply(status);
+            setStatus("");
+          }}
+          className="flex items-center gap-1.5 text-sm font-semibold bg-[#2563EB] text-white px-4 py-1.5 rounded-lg hover:bg-[#1D4ED8] disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer shadow-sm"
+        >
+          <RefreshCw className="w-3.5 h-3.5" /> Apply
+        </button>
+
+        <button
+          disabled={!hasSelection}
+          onClick={() => {
+            onClear();
+            setStatus("");
+          }}
+          className="text-sm font-medium text-[#64748B] hover:text-[#1E40AF] disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer px-2"
+        >
+          Clear
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/* ── inline status dropdown ───────────────────────────────────────────────── */
+// FIX 2: fallback to "pending" if currentStatus is not a valid order status,
+// preventing a blank/broken <select> when corrupted data comes through.
+const StatusCell = ({ orderId, currentStatus, onChange }) => {
+  const safeStatus = normalizeStatus(currentStatus);
+  const availableStatuses = ORDER_TRANSITIONS[safeStatus] || [safeStatus];
+
+  return (
+    <select
+      value={safeStatus}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => onChange([orderId], e.target.value)}
+      className={`text-xs font-semibold px-2.5 py-1 rounded-full border capitalize cursor-pointer outline-none
+        ${STATUS_COLORS[safeStatus] || "bg-gray-100 text-gray-600 border-gray-200"}`}
+    >
+      {availableStatuses.map((s) => (
+        <option
+          key={s}
+          value={s}
+          className="bg-white text-slate-800 capitalize"
+        >
+          {s}
+        </option>
+      ))}
+    </select>
+  );
+};
+
+/* ── sort button ─────────────────────────────────────────────────────────────
+ * FIX 4: defined OUTSIDE Orders() so it isn't recreated on every render.
+ * Wrapped in memo to prevent re-renders when unrelated state changes.
+ */
+const SortBtn = memo(({ field, sortField, onSort }) => (
+  <button
+    onClick={() => onSort(field)}
+    className="inline-flex items-center gap-0.5 cursor-pointer group"
+  >
+    <ArrowUpDown
+      className={`w-3 h-3 transition ${
+        sortField === field
+          ? "text-bree-primary"
+          : "text-bree-text-secondary opacity-40 group-hover:opacity-70"
+      }`}
+    />
+  </button>
+));
+
+/* ── main page ────────────────────────────────────────────────────────────── */
+const Orders = () => {
+  const [orders, setOrders] = useState([]);
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [sortField, setSortField] = useState("created_at");
+  const [sortDir, setSortDir] = useState("desc");
+  const [selectedOrder, setSelected] = useState(null);
+  const [checked, setChecked] = useState([]);
+
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterDate, setFilterDate] = useState("all");
+
+  const activeFilters = [filterStatus !== "all", filterDate !== "all"].filter(
+    Boolean,
+  ).length;
+
+  const clearFilters = () => {
+    setFilterStatus("all");
+    setFilterDate("all");
+    setPage(1);
+  };
+
+  const handleSearch = useCallback(() => {
+    setSearchQuery(searchInput.trim());
+    setPage(1);
+  }, [searchInput]);
+
+  const clearSearch = useCallback(() => {
+    setSearchInput("");
+    setSearchQuery("");
+    setPage(1);
+  }, []);
+
+  /* FIX 5: reset page on filter OR sort change so stale pages are never shown */
+  useEffect(() => {
+    setPage(1);
+  }, [filterStatus, filterDate, sortField, sortDir]);
+
+  const fetchOrders = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await axios.get(
+        `${API}/orders?search=${encodeURIComponent(searchQuery)}&page=${page}&limit=${PAGE_SIZE}&sort=${sortField}&dir=${sortDir}&order_status=${filterStatus}&date=${filterDate}`,
+        AUTH(),
+      );
+      setOrders(res.data?.orders || []);
+      setTotal(res.data?.total || 0);
+    } catch {
+      setOrders([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [searchQuery, page, sortField, sortDir, filterStatus, filterDate]);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  // Real-time sync: update orders when server sends 'order:updated'
+  useOrdersSync((updated) => {
+    setOrders((prev) =>
+      prev.map((o) => (o.id === updated.id ? { ...o, ...updated } : o)),
+    );
+    setSelected((prev) =>
+      prev && prev.id === updated.id ? { ...prev, ...updated } : prev,
+    );
+  });
+
+  /* status update (optimistic + API) */
+  const applyStatusChange = useCallback(
+    async (ids, newStatus) => {
+      if (!ORDER_STATUSES.includes(newStatus)) return;
+      const prev = orders;
+
+      // optimistic UI
+      setOrders((prevOrders) =>
+        prevOrders.map((o) =>
+          ids.includes(o.id) ? { ...o, order_status: newStatus } : o,
+        ),
+      );
+      setSelected((prevSel) =>
+        prevSel && ids.includes(prevSel.id)
+          ? { ...prevSel, order_status: newStatus }
+          : prevSel,
+      );
+      setChecked([]);
+
+      try {
+        const adminApi = `${process.env.REACT_APP_BACKEND_URL || "http://localhost:4000"}/api/admin`;
+        if (ids.length === 1) {
+          const res = await axios.patch(
+            `${adminApi}/orders/${ids[0]}/status`,
+            { status: newStatus },
+            AUTH(),
+          );
+          // reconcile with server
+          const updated = res.data.order || res.data;
+          setOrders((prevOrders) =>
+            prevOrders.map((o) =>
+              o.id === updated.id ? { ...o, ...updated } : o,
+            ),
+          );
+          setSelected((prevSel) =>
+            prevSel && prevSel.id === updated.id
+              ? { ...prevSel, ...updated }
+              : prevSel,
+          );
+        } else {
+          const res = await axios.patch(
+            `${adminApi}/orders/bulk-status`,
+            { ids, status: newStatus },
+            AUTH(),
+          );
+          const updatedList = res.data.orders || [];
+          if (updatedList.length) {
+            const updatedMap = new Map(updatedList.map((u) => [u.id, u]));
+            setOrders((prevOrders) =>
+              prevOrders.map((o) =>
+                updatedMap.has(o.id) ? { ...o, ...updatedMap.get(o.id) } : o,
+              ),
+            );
+            setSelected((prevSel) =>
+              prevSel && updatedMap.has(prevSel.id)
+                ? { ...prevSel, ...updatedMap.get(prevSel.id) }
+                : prevSel,
+            );
+          }
+        }
+        toast.success("Order status updated");
+      } catch (err) {
+        // rollback
+        setOrders(prev);
+        toast.error("Failed to update order status");
+      }
+    },
+    [orders],
+  );
+
+  // alias used by UI components
+  const handleStatusChange = useCallback(
+    (ids, newStatus) => {
+      applyStatusChange(ids, newStatus);
+    },
+    [applyStatusChange],
+  );
+
+  /* checkboxes */
+  const pageIds = orders.map((o) => o.id);
+  const allPageChecked =
+    pageIds.length > 0 && pageIds.every((id) => checked.includes(id));
+  const someChecked = pageIds.some((id) => checked.includes(id));
+
+  const toggleAll = () => {
+    if (allPageChecked) {
+      setChecked((prev) => prev.filter((id) => !pageIds.includes(id)));
+    } else {
+      setChecked((prev) => [...new Set([...prev, ...pageIds])]);
+    }
+  };
+
+  const toggleOne = (id) =>
+    setChecked((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  /* FIX 4 (cont.): handleSort now only sets state — SortBtn is outside the component */
+  const handleSort = useCallback((field) => {
+    setSortField((prev) => {
+      if (prev === field) {
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+        return prev;
+      }
+      setSortDir("asc");
+      return field;
+    });
+  }, []);
+
+  const statusOptions = [
+    { label: "All Statuses", value: "all" },
+    ...ORDER_STATUSES.map((s) => ({
+      label: s.charAt(0).toUpperCase() + s.slice(1),
+      value: s,
+    })),
+  ];
+
+  return (
+    <AdminLayout>
+      <div className="space-y-5">
+        {/* ── page header ── */}
+        <div>
+          <h1 className="font-outfit text-2xl font-semibold text-bree-text-primary">
+            Orders
+          </h1>
+          <p className="text-bree-text-secondary text-sm mt-1">
+            {total} total orders
+          </p>
+        </div>
+
+        {/* ── search + filters row ── */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-1 min-w-[220px] max-w-sm items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-bree-text-secondary" />
+              <Input
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleSearch();
+                  }
+                }}
+                placeholder="Search by Order ID, Name, or Mobile…"
+                className="pl-10 pr-10 h-10 rounded-xl border-bree-border focus:border-bree-primary text-sm"
+              />
+              {searchInput && (
+                <button
+                  onClick={clearSearch}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer"
+                  aria-label="Clear search"
+                >
+                  <X className="w-4 h-4 text-bree-text-secondary hover:text-bree-text-primary" />
+                </button>
+              )}
+            </div>
+
+            <Button
+              onClick={handleSearch}
+              disabled={loading}
+              className="h-10 rounded-xl px-4 text-sm"
+            >
+              <Search className="w-4 h-4 mr-2" />
+              Search
+            </Button>
+          </div>
+
+          <FilterDropdown
+            label="Status"
+            value={filterStatus}
+            options={statusOptions}
+            onChange={setFilterStatus}
+            colorMap
+          />
+
+          <FilterDropdown
+            label="Date Range"
+            value={filterDate}
+            options={DATE_RANGES}
+            onChange={setFilterDate}
+          />
+
+          <AnimatePresence>
+            {activeFilters > 0 && (
+              <motion.button
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                onClick={clearFilters}
+                className="flex items-center gap-1.5 h-10 px-3 rounded-xl border border-bree-border text-sm text-bree-text-secondary hover:text-red-500 hover:border-red-300 transition cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+                Clear {activeFilters > 1 ? `(${activeFilters})` : ""}
+              </motion.button>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* ── active filter chips ── */}
+        <AnimatePresence>
+          {(filterStatus !== "all" || filterDate !== "all") && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="flex flex-wrap gap-2"
+            >
+              {filterStatus !== "all" && (
+                <span
+                  className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full border ${STATUS_COLORS[filterStatus]}`}
+                >
+                  {filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1)}
+                  <button
+                    onClick={() => setFilterStatus("all")}
+                    className="hover:opacity-70 cursor-pointer"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+              {filterDate !== "all" && (
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full border bg-slate-100 text-slate-600 border-slate-200">
+                  {DATE_RANGES.find((d) => d.value === filterDate)?.label}
+                  <button
+                    onClick={() => setFilterDate("all")}
+                    className="hover:opacity-70 cursor-pointer"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── bulk bar ── */}
+        <BulkBar
+          count={checked.length}
+          availableStatuses={getCommonBulkStatuses(orders, checked)}
+          onApply={(status) => handleStatusChange(checked, status)}
+          onClear={() => setChecked([])}
+        />
+
+        {/* ── table ── */}
+        <div className="bg-white rounded-2xl shadow-premium border border-bree-border overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-bree-bg/50 border-b border-bree-border">
+                  <th className="py-3 pl-4 pr-2 w-10">
+                    <input
+                      type="checkbox"
+                      checked={allPageChecked}
+                      ref={(el) => {
+                        if (el)
+                          el.indeterminate = someChecked && !allPageChecked;
+                      }}
+                      onChange={toggleAll}
+                      className="w-4 h-4 rounded accent-bree-primary cursor-pointer"
+                    />
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-semibold text-bree-text-secondary uppercase tracking-wide whitespace-nowrap">
+                    <span className="flex items-center gap-1">
+                      Order ID{" "}
+                      <SortBtn
+                        field="id"
+                        sortField={sortField}
+                        onSort={handleSort}
+                      />
+                    </span>
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-semibold text-bree-text-secondary uppercase tracking-wide whitespace-nowrap">
+                    <span className="flex items-center gap-1">
+                      Customer{" "}
+                      <SortBtn
+                        field="customer_name"
+                        sortField={sortField}
+                        onSort={handleSort}
+                      />
+                    </span>
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-semibold text-bree-text-secondary uppercase tracking-wide whitespace-nowrap">
+                    Mobile
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-semibold text-bree-text-secondary uppercase tracking-wide whitespace-nowrap">
+                    Product
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-semibold text-bree-text-secondary uppercase tracking-wide">
+                    Qty
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-semibold text-bree-text-secondary uppercase tracking-wide whitespace-nowrap">
+                    <span className="flex items-center gap-1">
+                      Amount{" "}
+                      <SortBtn
+                        field="amount"
+                        sortField={sortField}
+                        onSort={handleSort}
+                      />
+                    </span>
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-semibold text-bree-text-secondary uppercase tracking-wide whitespace-nowrap">
+                    Payment
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-semibold text-bree-text-secondary uppercase tracking-wide whitespace-nowrap">
+                    Status
+                  </th>
+                  <th className="py-3 px-4 text-left text-xs font-semibold text-bree-text-secondary uppercase tracking-wide whitespace-nowrap">
+                    <span className="flex items-center gap-1">
+                      Date{" "}
+                      <SortBtn
+                        field="created_at"
+                        sortField={sortField}
+                        onSort={handleSort}
+                      />
+                    </span>
+                  </th>
+                  <th className="py-3 px-4 w-10" />
+                </tr>
+              </thead>
+
+              <tbody>
+                {loading ? (
+                  [...Array(5)].map((_, i) => (
+                    <tr
+                      key={i}
+                      className="border-b border-bree-border animate-pulse"
+                    >
+                      {[...Array(11)].map((__, j) => (
+                        <td key={j} className="py-4 px-4">
+                          <div className="h-3 bg-bree-bg rounded w-full" />
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                ) : orders.length === 0 ? (
+                  <tr>
+                    <td colSpan={11} className="py-16 text-center">
+                      <Package className="w-10 h-10 text-bree-border mx-auto mb-3" />
+                      <p className="text-bree-text-secondary text-sm">
+                        No orders found
+                        {searchQuery && ` for "${searchQuery}"`}
+                        {filterStatus !== "all" &&
+                          ` with status "${filterStatus}"`}
+                      </p>
+                      {(searchQuery || activeFilters > 0) && (
+                        <button
+                          onClick={() => {
+                            clearSearch();
+                            clearFilters();
+                          }}
+                          className="mt-3 text-bree-primary text-sm underline cursor-pointer"
+                        >
+                          Clear all filters
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ) : (
+                  orders.map((order, i) => (
+                    <motion.tr
+                      key={order.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: i * 0.025 }}
+                      className={`border-b border-bree-border last:border-0 transition-colors
+                        ${checked.includes(order.id) ? "bg-blue-50/60" : "hover:bg-bree-bg/30"}`}
+                    >
+                      <td className="py-3 pl-4 pr-2">
+                        <input
+                          type="checkbox"
+                          checked={checked.includes(order.id)}
+                          onChange={() => toggleOne(order.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-4 h-4 rounded accent-bree-primary cursor-pointer"
+                        />
+                      </td>
+                      <td className="py-3 px-4 text-sm font-medium text-bree-primary whitespace-nowrap">
+                        #{order.id}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-bree-text-primary whitespace-nowrap">
+                        {order.customer_name}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-bree-text-secondary whitespace-nowrap">
+                        {order.mobile_number}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-bree-text-secondary max-w-[160px] truncate">
+                        {order.product_name ||
+                          order.items?.[0]?.name ||
+                          "Unknown"}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-center text-bree-text-secondary">
+                        {order.quantity ?? order.items?.[0]?.quantity ?? "—"}
+                      </td>
+                      <td className="py-3 px-4 text-sm font-medium text-bree-text-primary whitespace-nowrap">
+                        ₹{Number(order.amount).toLocaleString()}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${
+                            PAYMENT_COLORS[order.payment_status] ||
+                            "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {order.payment_status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <StatusCell
+                          orderId={order.id}
+                          currentStatus={order.order_status}
+                          onChange={handleStatusChange}
+                        />
+                      </td>
+                      <td className="py-3 px-4 text-xs text-bree-text-secondary whitespace-nowrap">
+                        {new Date(order.created_at).toLocaleDateString("en-IN")}
+                      </td>
+                      <td className="py-3 px-4">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setSelected(order)}
+                          className="w-8 h-8 rounded-lg hover:bg-bree-bg"
+                        >
+                          <Eye className="w-4 h-4 text-bree-text-secondary" />
+                        </Button>
+                      </td>
+                    </motion.tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* pagination */}
+          {totalPages > 1 && (
+            <div className="px-6 py-4 border-t border-bree-border flex items-center justify-between">
+              <p className="text-sm text-bree-text-secondary">
+                Showing {(page - 1) * PAGE_SIZE + 1}–
+                {Math.min(page * PAGE_SIZE, total)} of {total}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="w-8 h-8 rounded-lg border-bree-border"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                  const pg = page <= 3 ? i + 1 : page - 2 + i;
+                  if (pg < 1 || pg > totalPages) return null;
+                  return (
+                    <Button
+                      key={pg}
+                      size="icon"
+                      onClick={() => setPage(pg)}
+                      className={`w-8 h-8 rounded-lg text-xs ${
+                        page === pg
+                          ? "bg-bree-primary border-bree-primary text-white"
+                          : "border border-bree-border bg-white text-bree-text-primary hover:bg-bree-bg"
+                      }`}
+                    >
+                      {pg}
+                    </Button>
+                  );
+                })}
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="w-8 h-8 rounded-lg border-bree-border"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* FIX 1 + 7: AnimatePresence at the page level with mode="wait" and key={order.id}
+          so modal exit animation fires correctly and switching orders re-mounts cleanly */}
+      <AnimatePresence mode="wait">
+        {selectedOrder && (
+          <OrderModal
+            key={selectedOrder.id}
+            order={selectedOrder}
+            onClose={() => setSelected(null)}
+            onStatusChange={handleStatusChange}
+          />
+        )}
+      </AnimatePresence>
+    </AdminLayout>
+  );
+};
+
+export default Orders;

@@ -1,0 +1,177 @@
+import { useState } from "react";
+import { motion } from "framer-motion";
+import { ShoppingBag, Check } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { useCart } from "@/context/CartContext";
+import { toast } from "sonner";
+
+const ProductCard = ({ product, index = 0 }) => {
+  const { addToCart } = useCart();
+
+  const [isAdded, setIsAdded] = useState(false);
+
+  const mrp = Number(product.mrp || product.mrp_price || product.originalPrice || product.price || 0);
+  const price = Number(product.price || 0);
+  const discountPercentage = mrp > 0 ? Math.round(((mrp - price) / mrp) * 100) : 0;
+
+  const isOutOfStock = product.status === "Out Of Stock";
+
+  const handleAddToCart = () => {
+    if (isOutOfStock) return;
+
+    addToCart(product);
+
+    setIsAdded(true);
+
+    toast.success(`${product.name} added to cart`);
+
+    setTimeout(() => setIsAdded(false), 2000);
+  };
+
+  return (
+    <motion.div
+      initial={{
+        opacity: 0,
+        y: 30,
+      }}
+      whileInView={{
+        opacity: 1,
+        y: 0,
+      }}
+      viewport={{
+        once: true,
+        margin: "-50px",
+      }}
+      transition={{
+        duration: 0.5,
+        delay: index * 0.1,
+      }}
+      data-testid={`product-card-${product.id}`}
+      className={`relative bg-white p-5 md:p-7 rounded-[28px] border transition-all duration-300 hover:shadow-xl ${
+        product.popular ? "border-bree-primary border-2" : "border-bree-border"
+      }`}
+    >
+      {/* Popular Badge */}
+      {product.popular && (
+        <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10">
+          <span className="bg-bree-primary text-white px-4 py-1.5 rounded-full text-[10px] md:text-xs font-semibold tracking-wide shadow-md whitespace-nowrap">
+            MOST POPULAR
+          </span>
+        </div>
+      )}
+
+      {/* Product Image */}
+      <div className="relative h-40 md:h-52 mb-5 md:mb-6 flex items-center justify-center rounded-3xl bg-bree-bg overflow-hidden">
+        {isOutOfStock && (
+          <div className="absolute top-4 right-4 z-10 bg-red-500 text-white rounded-full px-3 py-1 text-[10px] font-semibold uppercase shadow-md">
+            Out of Stock
+          </div>
+        )}
+
+        <img
+          src={product.image || '/images/default-product.png'}
+          alt={product.name}
+          onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/images/default-product.png'; }}
+          className="h-32 md:h-44 w-auto object-contain relative z-10 hover:scale-105 transition-transform duration-500"
+        />
+      </div>
+
+      {/* Product Info */}
+      <div className="text-center">
+        {/* Product Type */}
+        <span className="text-[10px] md:text-xs tracking-[0.18em] uppercase font-semibold text-bree-primary">
+          {product.quantity}
+          -Day Wellness Pack
+        </span>
+
+        {/* Product Name */}
+        <h3 className="font-outfit text-3xl md:text-[28px] leading-tight font-semibold text-bree-text-primary mt-3">
+          {product.name}
+        </h3>
+
+        {/* Description */}
+        <p className="text-bree-text-secondary text-base md:text-lg mt-2">
+          {product.description}
+        </p>
+
+        {/* Features */}
+        <ul className="space-y-2 pt-5">
+          {product.features?.map((feature) => (
+            <li
+              key={feature}
+              className="flex items-center justify-center gap-2 text-sm md:text-base text-bree-text-secondary"
+            >
+              <Check className="w-4 h-4 text-bree-primary flex-shrink-0" />
+
+              {feature}
+            </li>
+          ))}
+        </ul>
+
+        {/* Pricing */}
+        <div className="pt-6">
+          {/* Price Row */}
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            {/* Selling Price */}
+            <span className="font-outfit text-2xl md:text-3xl font-bold text-bree-text-primary">
+              ₹{product.price}
+            </span>
+
+            {/* MRP */}
+            <span className="text-lg text-red-400 line-through">
+              ₹{product.mrp}
+            </span>
+          </div>
+
+          {/* Discount Badge */}
+          <div className="mt-3 flex justify-center">
+            <span className="bg-red-50 text-red-500 text-xs md:text-sm font-semibold px-3 py-1 rounded-full border border-red-100">
+              {discountPercentage}% OFF
+            </span>
+          </div>
+
+          {/* Per Bottle */}
+          {product.quantity > 1 && (
+            <div className="text-sm text-bree-text-secondary mt-3">
+              (₹
+              {(product.price / product.quantity).toFixed(0)}
+              /bottle)
+            </div>
+          )}
+        </div>
+
+        {/* Add To Cart */}
+        <Button
+          type="button"
+          onClick={handleAddToCart}
+          data-testid={`add-to-cart-${product.id}`}
+          disabled={isOutOfStock}
+          className={`w-full mt-6 py-5 rounded-full text-base font-medium transition-all duration-300 ${
+            isOutOfStock
+              ? "bg-gray-400 cursor-not-allowed opacity-70 text-white"
+              : isAdded
+              ? "bg-bree-success text-white"
+              : "bg-bree-primary hover:bg-bree-primary-hover text-white"
+          }`}
+        >
+          {isOutOfStock ? (
+            <span>Out Of Stock</span>
+          ) : isAdded ? (
+            <span className="flex items-center justify-center gap-2">
+              <Check className="w-5 h-5" />
+              Added!
+            </span>
+          ) : (
+            <span className="flex items-center justify-center gap-2">
+              <ShoppingBag className="w-5 h-5" />
+              Add to Cart
+            </span>
+          )}
+        </Button>
+      </div>
+    </motion.div>
+  );
+};
+
+export default ProductCard;
