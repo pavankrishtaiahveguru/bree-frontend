@@ -42,12 +42,14 @@ const Checkout = () => {
       navigate("/shop");
       return;
     }
+
     validateAndLoadData();
-  }, []);
+  }, [cartItems.length, navigate, validateAndLoadData]);
 
   // Validate cart and load addresses
-  const validateAndLoadData = async () => {
+  const validateAndLoadData = useCallback(async () => {
     setIsValidating(true);
+
     try {
       // 1. Validate cart
       const validationResponse = await axios.post("/api/orders/validate-cart", {
@@ -60,40 +62,49 @@ const Checkout = () => {
 
       setCartValidation(validationResponse.data);
 
-      // If cart has errors, show them
       if (!validationResponse.data.valid) {
         toast.error("Your cart has items that need attention");
+
         setStep("cart-update");
+
         setIsValidating(false);
+
         return;
       }
 
-      // 2. Fetch user addresses
+      // 2. Fetch addresses
       const addressResponse = await axios.get("/api/addresses");
+
       setAddresses(addressResponse.data);
 
-      // Set default address if available
       const defaultAddr = addressResponse.data.find((a) => a.is_default);
+
       if (defaultAddr) {
         setSelectedAddress(defaultAddr.id);
       }
 
-      // Fetch user profile for contact info
+      // 3. Fetch profile
       const profileResponse = await axios.get("/api/profile");
+
       setContactInfo({
         name: profileResponse.data.name || "",
+
         email: profileResponse.data.email || "",
+
         phone: profileResponse.data.phone || "",
       });
 
       setStep("address");
+
       setIsValidating(false);
     } catch (error) {
       console.error("Validation error:", error);
+
       toast.error("Failed to load checkout data");
+
       setIsValidating(false);
     }
-  };
+  }, [cartItems]);
 
   // Handle address selection
   const handleAddressSelect = (addressId) => {
