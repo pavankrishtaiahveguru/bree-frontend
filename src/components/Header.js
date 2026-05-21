@@ -6,7 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import CartDrawer from "./CartDrawer";
 
 const LOGO_URL =
-  "https://res.cloudinary.com/dxfs7qyzm/image/upload/v1778914388/Logo_klki4p.png";
+  "https://res.cloudinary.com/dxfs7qyzm/image/upload/v1779338649/Bree-logo_xgn0eh.png";
 
 const navLinks = [
   { name: "Home", path: "/" },

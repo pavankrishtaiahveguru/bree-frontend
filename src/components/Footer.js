@@ -10,7 +10,7 @@ import {
 import DevelopedByStaffArc from "./DevelopedByStaffArc";
 
 const LOGO_URL =
-  "https://res.cloudinary.com/dxfs7qyzm/image/upload/v1778914388/Logo_klki4p.png";
+  "https://res.cloudinary.com/dxfs7qyzm/image/upload/v1779338649/Bree-logo_xgn0eh.png";
 
 const Footer = () => {
   return (
@@ -22,39 +22,49 @@ const Footer = () => {
             <img
               src={LOGO_URL}
               alt="BREE"
-              className="h-12 w-auto rounded-lg bg-white/90 p-1"
+              className="h-28 md:h-32 lg:h-36 w-auto object-contain brightness-0 invert"
             />
             <p className="text-white/70 text-sm leading-relaxed">
               Pure Amla wellness shots for your daily ritual. Rise. Sip. Glow.
             </p>
+            <h4 className="font-outfit font-semibold text-lg mb-4">
+              Stay Connected
+            </h4>
             <div className="flex gap-4">
               <a
-                href="https://instagram.com"
+                href="https://www.instagram.com/breefit.in"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                className="p-3 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
                 data-testid="social-instagram"
               >
-                <Instagram className="w-5 h-5" />
+                <Instagram className="w-6 h-6" />
               </a>
               <a
-                href="https://facebook.com"
+                href="https://www.facebook.com/breefit.in"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                className="p-3 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
                 data-testid="social-facebook"
               >
-                <Facebook className="w-5 h-5" />
+                <Facebook className="w-6 h-6" />
               </a>
-              <a
+              {/* <a
                 href="https://twitter.com"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                className="p-3 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
                 data-testid="social-twitter"
               >
-                <Twitter className="w-5 h-5" />
-              </a>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  className="w-6 h-6"
+                >
+                  <path d="M18.901 1.153h3.68l-8.04 9.19L24 22.847h-7.406l-5.8-7.584-6.637 7.584H.478l8.6-9.83L0 1.153h7.594l5.243 6.932L18.901 1.153zm-1.29 19.494h2.039L6.486 3.24H4.298l13.313 17.407z" />
+                </svg>
+              </a> */}
             </div>
           </div>
 
