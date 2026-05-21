@@ -55,7 +55,11 @@ const Header = () => {
           <div className="flex items-center justify-between h-20">
             {/* Logo */}
             <Link to="/" className="flex items-center" data-testid="logo-link">
-              <img src={LOGO_URL} alt="BREE" className="h-12 md:h-14 w-auto" />
+              <img
+                src={LOGO_URL}
+                alt="BREE"
+                className="h-16 md:h-20 lg:h-24 w-auto"
+              />
             </Link>
 
             {/* Desktop Navigation */}
