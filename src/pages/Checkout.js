@@ -36,17 +36,7 @@ const Checkout = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [orderCreated, setOrderCreated] = useState(null);
 
-  // Fetch user data on mount
-  useEffect(() => {
-    if (!cartItems.length) {
-      navigate("/shop");
-      return;
-    }
-
-    validateAndLoadData();
-  }, [cartItems.length, navigate, validateAndLoadData]);
-
-  // Validate cart and load addresses
+  // Validate cart and load addresses — defined BEFORE the useEffect that calls it
   const validateAndLoadData = useCallback(async () => {
     setIsValidating(true);
 
@@ -105,6 +95,15 @@ const Checkout = () => {
       setIsValidating(false);
     }
   }, [cartItems]);
+
+  // Fetch user data on mount — useEffect is AFTER the callback it references
+  useEffect(() => {
+    if (!cartItems.length) {
+      navigate("/shop");
+      return;
+    }
+    validateAndLoadData();
+  }, [cartItems.length, navigate, validateAndLoadData]);
 
   // Handle address selection
   const handleAddressSelect = (addressId) => {

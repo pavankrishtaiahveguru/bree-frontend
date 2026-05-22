@@ -1,13 +1,20 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import axios from '@/lib/api';
-import { toast } from 'sonner';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
+import axios from "@/lib/api";
+import { toast } from "sonner";
 
 const AdminAuthContext = createContext();
+const ADMIN_TOKEN_KEY = "bree_admin_token";
 
 export const useAdminAuth = () => {
   const context = useContext(AdminAuthContext);
   if (!context) {
-    throw new Error('useAdminAuth must be used within an AdminAuthProvider');
+    throw new Error("useAdminAuth must be used within an AdminAuthProvider");
   }
   return context;
 };
@@ -20,11 +27,12 @@ export const AdminAuthProvider = ({ children }) => {
   const verifyAdmin = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await axios.get('/api/admin/me');
+      const { data } = await axios.get("/api/admin/me");
       setAdmin(data.admin || null);
       return data.admin || null;
     } catch (error) {
       setAdmin(null);
+      localStorage.removeItem(ADMIN_TOKEN_KEY);
       return null;
     } finally {
       setLoading(false);
@@ -32,14 +40,25 @@ export const AdminAuthProvider = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    verifyAdmin();
+    // Only call verifyAdmin if we have a stored token — avoids 401 spam on public pages
+    const stored = localStorage.getItem(ADMIN_TOKEN_KEY);
+    if (stored) {
+      verifyAdmin();
+    } else {
+      setLoading(false);
+    }
   }, [verifyAdmin]);
 
   const loginAdmin = async (email, password) => {
     setAuthenticating(true);
     try {
-      const { data } = await axios.post('/api/admin/login', { email, password });
+      const { data } = await axios.post("/api/admin/login", {
+        email,
+        password,
+      });
       setAdmin(data.admin || null);
+      // Store a flag so reload knows to verify the session
+      localStorage.setItem(ADMIN_TOKEN_KEY, "1");
       return data.admin;
     } catch (error) {
       throw error;
@@ -50,16 +69,28 @@ export const AdminAuthProvider = ({ children }) => {
 
   const logoutAdmin = async () => {
     try {
-      await axios.post('/api/admin/logout');
+      await axios.post("/api/admin/logout");
     } catch (err) {
-      toast.error('Unable to log out cleanly. You will still be signed out locally.');
+      toast.error(
+        "Unable to log out cleanly. You will still be signed out locally.",
+      );
     } finally {
       setAdmin(null);
+      localStorage.removeItem(ADMIN_TOKEN_KEY);
     }
   };
 
   return (
-    <AdminAuthContext.Provider value={{ admin, loading, authenticating, loginAdmin, logoutAdmin, verifyAdmin }}>
+    <AdminAuthContext.Provider
+      value={{
+        admin,
+        loading,
+        authenticating,
+        loginAdmin,
+        logoutAdmin,
+        verifyAdmin,
+      }}
+    >
       {children}
     </AdminAuthContext.Provider>
   );
