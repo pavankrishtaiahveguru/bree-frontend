@@ -156,7 +156,7 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
             }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
           >
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto border border-bree-border">
+            <div className=" bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto border border-bree-border custom-scrollbar ">
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-5 border-b border-bree-border">
                 <div>
@@ -408,7 +408,13 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
                   className="rounded-full bg-bree-primary hover:bg-bree-primary-hover text-white px-6"
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? (isEdit ? "Saving..." : "Adding...") : isEdit ? "Save Changes" : "Add Product"}
+                  {isSubmitting
+                    ? isEdit
+                      ? "Saving..."
+                      : "Adding..."
+                    : isEdit
+                      ? "Save Changes"
+                      : "Add Product"}
                 </Button>
               </div>
             </div>
