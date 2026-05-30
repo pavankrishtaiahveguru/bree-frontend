@@ -30,6 +30,8 @@ export const useCart = () => {
 export const CartProvider = ({ children }) => {
   const [cartItems, setCartItems] = useState(() => loadCartFromStorage());
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [lastSync, setLastSync] = useState(null);
+  const [pendingChanges, setPendingChanges] = useState([]);
 
   // Persist cart to localStorage whenever it changes
   useEffect(() => {
@@ -75,6 +77,90 @@ export const CartProvider = ({ children }) => {
     setCartItems([]);
   }, []);
 
+  // Sync cart with backend to validate prices/stock/availability
+  const syncCart = useCallback(async () => {
+    try {
+      if (!cartItems || !cartItems.length)
+        return { anyChange: false, items: [] };
+      const payload = {
+        items: cartItems.map((it) => ({
+          id: it.id,
+          price: it.price,
+          quantity: it.quantity,
+        })),
+      };
+      const axios = (await import("@/lib/api")).default;
+      const res = await axios.post("/api/orders/validate-cart", payload);
+      const data = res.data;
+      if (data && Array.isArray(data.items)) {
+        // Apply updates where price changed or availability changed
+        let updated = false;
+        const newCart = cartItems.map((it) => {
+          const found = data.items.find((i) => i.id === it.id);
+          if (!found) return it;
+          let updatedItem = { ...it };
+          if (found.priceChanged) {
+            updatedItem = {
+              ...updatedItem,
+              price: found.currentPrice,
+              _priceChanged: true,
+            };
+            updated = true;
+          }
+          if (found.outOfStock || found.insufficientStock || !found.available) {
+            updatedItem = {
+              ...updatedItem,
+              _unavailable: true,
+              _available: found.available,
+              _stock: found.stock,
+              _requestedQty: found.requestedQty,
+            };
+            updated = true;
+          }
+          // update image if provided
+          if (found.image && !updatedItem.image) {
+            updatedItem = { ...updatedItem, image: found.image };
+            updated = true;
+          }
+          return updatedItem;
+        });
+
+        if (updated) {
+          setCartItems(newCart);
+          setPendingChanges(
+            data.items.filter(
+              (i) =>
+                i.priceChanged ||
+                i.outOfStock ||
+                i.insufficientStock ||
+                !i.available,
+            ),
+          );
+          setLastSync({ at: Date.now(), result: data });
+        } else {
+          setPendingChanges([]);
+          setLastSync({ at: Date.now(), result: data });
+        }
+
+        return data;
+      }
+      return { anyChange: false, items: [] };
+    } catch (err) {
+      console.error("syncCart error:", err);
+      return { anyChange: false, items: [] };
+    }
+  }, [cartItems]);
+
+  // Refresh cart on page load
+  useEffect(() => {
+    (async () => {
+      try {
+        await syncCart();
+      } catch (e) {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // FIX: Use Number() to ensure price is always treated as a number —
   // prevents NaN when price comes as a string from backend
   const cartTotal = cartItems.reduce(
@@ -96,6 +182,9 @@ export const CartProvider = ({ children }) => {
         cartCount,
         isCartOpen,
         setIsCartOpen,
+        syncCart,
+        lastSync,
+        pendingChanges,
       }}
     >
       {children}

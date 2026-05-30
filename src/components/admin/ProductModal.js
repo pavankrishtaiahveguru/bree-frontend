@@ -50,7 +50,11 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
           ...EMPTY_FORM,
           ...initial,
           stockQty: initial.stock_qty ?? initial.stockQty ?? "",
-          features: initial.features?.join(", ") || "",
+          features: Array.isArray(initial.features)
+            ? initial.features.join(", ")
+            : typeof initial.features === "string"
+              ? initial.features
+              : "",
         });
 
         setPreview(initial.image || "");
@@ -112,7 +116,7 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
         mrp: Number(form.mrp),
         quantity: Number(form.quantity),
         stockQty: Number(form.stockQty || 0),
-        features: form.features.split(",").map((item) => item.trim()),
+        features: form.features || "",
         imageFile,
       });
       onClose();

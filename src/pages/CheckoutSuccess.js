@@ -4,11 +4,8 @@ import { useSearchParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   CheckCircle,
-  Package,
   ArrowRight,
   Loader2,
-  CreditCard,
-  Calendar,
   Truck,
 } from "lucide-react";
 

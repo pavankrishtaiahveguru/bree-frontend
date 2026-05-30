@@ -82,6 +82,10 @@ const Products = () => {
   const handleSave = async (data) => {
     setLoading(true);
     try {
+      const featuresString = Array.isArray(data.features)
+        ? data.features.join(", ")
+        : data.features || "";
+
       const buildFormData = () => {
         const formData = new FormData();
         if (data.imageFile) {
@@ -96,12 +100,7 @@ const Products = () => {
         formData.append("stockQty", data.stockQty.toString());
         formData.append("popular", data.popular ? "true" : "false");
         formData.append("status", data.status);
-        formData.append(
-          "features",
-          Array.isArray(data.features)
-            ? data.features.join(", ")
-            : data.features || "",
-        );
+        formData.append("features", featuresString);
         return formData;
       };
 
@@ -110,9 +109,7 @@ const Products = () => {
         ? buildFormData()
         : {
             ...data,
-            features: Array.isArray(data.features)
-              ? data.features
-              : data.features || [],
+            features: featuresString,
           };
 
       if (editing) {
@@ -251,236 +248,239 @@ const Products = () => {
           <div className="hidden lg:block bg-white rounded-3xl border border-bree-border overflow-hidden">
             <table className="w-full">
               <thead className="bg-bree-bg">
-            <tr className="text-left">
-              <th className="px-6 py-4 text-sm font-semibold text-bree-text-secondary">
-                Product
-              </th>
+                <tr className="text-left">
+                  <th className="px-6 py-4 text-sm font-semibold text-bree-text-secondary">
+                    Product
+                  </th>
 
-              <th className="px-6 py-4 text-sm font-semibold text-bree-text-secondary">
-                Category
-              </th>
+                  <th className="px-6 py-4 text-sm font-semibold text-bree-text-secondary">
+                    Category
+                  </th>
 
-              <th className="px-6 py-4 text-sm font-semibold text-bree-text-secondary">
-                Pricing
-              </th>
+                  <th className="px-6 py-4 text-sm font-semibold text-bree-text-secondary">
+                    Pricing
+                  </th>
 
-              <th className="px-6 py-4 text-sm font-semibold text-bree-text-secondary">
-                Status
-              </th>
+                  <th className="px-6 py-4 text-sm font-semibold text-bree-text-secondary">
+                    Status
+                  </th>
 
-              <th className="px-6 py-4 text-sm font-semibold text-bree-text-secondary">
-                Actions
-              </th>
-            </tr>
-          </thead>
+                  <th className="px-6 py-4 text-sm font-semibold text-bree-text-secondary">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
 
-          <tbody>
+              <tbody>
+                {filteredProducts.map((product) => {
+                  const discount =
+                    product.mrp > 0
+                      ? Math.floor(
+                          ((product.mrp - product.price) / product.mrp) * 100,
+                        )
+                      : 0;
+
+                  return (
+                    <tr
+                      key={product.id}
+                      className="border-t border-bree-border"
+                    >
+                      {/* Product */}
+                      <td className="px-6 py-5">
+                        <div className="flex items-center gap-4">
+                          <div className="w-16 h-16 rounded-2xl bg-bree-bg flex items-center justify-center overflow-hidden">
+                            <img
+                              src={product.image}
+                              alt={product.name}
+                              className="w-12 h-12 object-contain"
+                            />
+                          </div>
+
+                          <div>
+                            <h3 className="font-semibold text-bree-text-primary">
+                              {product.name}
+                            </h3>
+
+                            <p className="text-sm text-bree-text-secondary mt-1">
+                              {product.quantity}
+                              -Day Wellness Pack
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Category */}
+                      <td className="px-6 py-5 text-bree-text-secondary">
+                        {product.category}
+                      </td>
+
+                      {/* Pricing */}
+                      <td className="px-6 py-5">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-bree-text-primary">
+                              ₹{product.price}
+                            </span>
+
+                            <span className="text-sm text-red-400 line-through">
+                              ₹{product.mrp}
+                            </span>
+                          </div>
+
+                          <div className="mt-2">
+                            <span className="text-xs bg-red-50 text-red-500 px-3 py-1 rounded-full">
+                              {discount}% OFF
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Status */}
+                      <td className="px-6 py-5">
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            product.status === "In Stock"
+                              ? "bg-green-50 text-green-600"
+                              : "bg-red-50 text-red-500"
+                          }`}
+                        >
+                          {product.status}
+                        </span>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-6 py-5">
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => handleManageRelations(product)}
+                            className="w-10 h-10 rounded-xl bg-bree-bg hover:bg-bree-primary/10 flex items-center justify-center transition"
+                            title="Manage relations"
+                          >
+                            <span className="text-sm font-semibold text-bree-primary">
+                              R
+                            </span>
+                          </button>
+                          <button
+                            onClick={() => handleEdit(product)}
+                            className="w-10 h-10 rounded-xl bg-bree-bg hover:bg-bree-primary/10 flex items-center justify-center transition"
+                            title="Edit product"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(product.id)}
+                            className="w-10 h-10 rounded-xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center transition"
+                            title="Delete product"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Cards */}
+          <div className="lg:hidden space-y-4">
             {filteredProducts.map((product) => {
-              const discount =
-                product.mrp > 0
-                  ? Math.floor(
-                      ((product.mrp - product.price) / product.mrp) * 100,
-                    )
-                  : 0;
+              const discount = Math.round(
+                ((product.mrp - product.price) / product.mrp) * 100,
+              );
 
               return (
-                <tr key={product.id} className="border-t border-bree-border">
-                  {/* Product */}
-                  <td className="px-6 py-5">
-                    <div className="flex items-center gap-4">
-                      <div className="w-16 h-16 rounded-2xl bg-bree-bg flex items-center justify-center overflow-hidden">
-                        <img
-                          src={product.image}
-                          alt={product.name}
-                          className="w-12 h-12 object-contain"
-                        />
-                      </div>
-
-                      <div>
-                        <h3 className="font-semibold text-bree-text-primary">
-                          {product.name}
-                        </h3>
-
-                        <p className="text-sm text-bree-text-secondary mt-1">
-                          {product.quantity}
-                          -Day Wellness Pack
-                        </p>
-                      </div>
+                <div
+                  key={product.id}
+                  className="bg-white border border-bree-border rounded-3xl p-5"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="w-20 h-20 rounded-2xl bg-bree-bg flex items-center justify-center overflow-hidden flex-shrink-0">
+                      <img
+                        src={product.image}
+                        alt={product.name}
+                        className="w-14 h-14 object-contain"
+                      />
                     </div>
-                  </td>
 
-                  {/* Category */}
-                  <td className="px-6 py-5 text-bree-text-secondary">
-                    {product.category}
-                  </td>
+                    <div className="flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-semibold text-bree-text-primary">
+                            {product.name}
+                          </h3>
 
-                  {/* Pricing */}
-                  <td className="px-6 py-5">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-bree-text-primary">
-                          ₹{product.price}
-                        </span>
+                          <p className="text-sm text-bree-text-secondary mt-1">
+                            {product.category}
+                          </p>
+                        </div>
 
-                        <span className="text-sm text-red-400 line-through">
-                          ₹{product.mrp}
-                        </span>
+                        {product.popular && (
+                          <span className="text-[10px] bg-bree-primary text-white px-2 py-1 rounded-full">
+                            Popular
+                          </span>
+                        )}
                       </div>
 
-                      <div className="mt-2">
-                        <span className="text-xs bg-red-50 text-red-500 px-3 py-1 rounded-full">
+                      <div className="mt-4">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-bree-text-primary">
+                            ₹{product.price}
+                          </span>
+
+                          <span className="text-sm text-red-400 line-through">
+                            ₹{product.mrp}
+                          </span>
+                        </div>
+
+                        <span className="inline-block mt-2 text-xs bg-red-50 text-red-500 px-3 py-1 rounded-full">
                           {discount}% OFF
                         </span>
                       </div>
-                    </div>
-                  </td>
 
-                  {/* Status */}
-                  <td className="px-6 py-5">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        product.status === "In Stock"
-                          ? "bg-green-50 text-green-600"
-                          : "bg-red-50 text-red-500"
-                      }`}
-                    >
-                      {product.status}
-                    </span>
-                  </td>
-
-                  {/* Actions */}
-                  <td className="px-6 py-5">
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => handleManageRelations(product)}
-                        className="w-10 h-10 rounded-xl bg-bree-bg hover:bg-bree-primary/10 flex items-center justify-center transition"
-                        title="Manage relations"
-                      >
-                        <span className="text-sm font-semibold text-bree-primary">
-                          R
+                      <div className="flex items-center justify-between mt-5">
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            product.status === "In Stock"
+                              ? "bg-green-50 text-green-600"
+                              : "bg-red-50 text-red-500"
+                          }`}
+                        >
+                          {product.status}
                         </span>
-                      </button>
-                      <button
-                        onClick={() => handleEdit(product)}
-                        className="w-10 h-10 rounded-xl bg-bree-bg hover:bg-bree-primary/10 flex items-center justify-center transition"
-                        title="Edit product"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(product.id)}
-                        className="w-10 h-10 rounded-xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center transition"
-                        title="Delete product"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleManageRelations(product)}
+                            className="w-9 h-9 rounded-xl bg-bree-bg flex items-center justify-center"
+                            title="Manage relations"
+                          >
+                            <span className="text-sm font-semibold text-bree-primary">
+                              R
+                            </span>
+                          </button>
+                          <button
+                            onClick={() => handleEdit(product)}
+                            className="w-9 h-9 rounded-xl bg-bree-bg flex items-center justify-center"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            onClick={() => handleDelete(product.id)}
+                            className="w-9 h-9 rounded-xl bg-red-50 text-red-500 flex items-center justify-center"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </td>
-                </tr>
+                  </div>
+                </div>
               );
             })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Mobile Cards */}
-      <div className="lg:hidden space-y-4">
-        {filteredProducts.map((product) => {
-          const discount = Math.round(
-            ((product.mrp - product.price) / product.mrp) * 100,
-          );
-
-          return (
-            <div
-              key={product.id}
-              className="bg-white border border-bree-border rounded-3xl p-5"
-            >
-              <div className="flex items-start gap-4">
-                <div className="w-20 h-20 rounded-2xl bg-bree-bg flex items-center justify-center overflow-hidden flex-shrink-0">
-                  <img
-                    src={product.image}
-                    alt={product.name}
-                    className="w-14 h-14 object-contain"
-                  />
-                </div>
-
-                <div className="flex-1">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="font-semibold text-bree-text-primary">
-                        {product.name}
-                      </h3>
-
-                      <p className="text-sm text-bree-text-secondary mt-1">
-                        {product.category}
-                      </p>
-                    </div>
-
-                    {product.popular && (
-                      <span className="text-[10px] bg-bree-primary text-white px-2 py-1 rounded-full">
-                        Popular
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="mt-4">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-bree-text-primary">
-                        ₹{product.price}
-                      </span>
-
-                      <span className="text-sm text-red-400 line-through">
-                        ₹{product.mrp}
-                      </span>
-                    </div>
-
-                    <span className="inline-block mt-2 text-xs bg-red-50 text-red-500 px-3 py-1 rounded-full">
-                      {discount}% OFF
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between mt-5">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        product.status === "In Stock"
-                          ? "bg-green-50 text-green-600"
-                          : "bg-red-50 text-red-500"
-                      }`}
-                    >
-                      {product.status}
-                    </span>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleManageRelations(product)}
-                        className="w-9 h-9 rounded-xl bg-bree-bg flex items-center justify-center"
-                        title="Manage relations"
-                      >
-                        <span className="text-sm font-semibold text-bree-primary">
-                          R
-                        </span>
-                      </button>
-                      <button
-                        onClick={() => handleEdit(product)}
-                        className="w-9 h-9 rounded-xl bg-bree-bg flex items-center justify-center"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-
-                      <button
-                        onClick={() => handleDelete(product.id)}
-                        className="w-9 h-9 rounded-xl bg-red-50 text-red-500 flex items-center justify-center"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+          </div>
         </>
       )}
 

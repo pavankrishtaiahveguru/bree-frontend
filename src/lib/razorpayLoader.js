@@ -1,10 +1,10 @@
 /**
  * Razorpay Script Loader
  * =====================
- * 
+ *
  * Dynamically loads Razorpay SDK only when checkout is initiated.
  * Prevents unnecessary network requests and preload warnings.
- * 
+ *
  * Benefits:
  * - Loads only when user initiates payment
  * - Reduces initial page load time
@@ -17,7 +17,7 @@ let razorpayScriptPromise = null;
 /**
  * Load Razorpay SDK dynamically
  * Returns a promise that resolves when Razorpay is ready
- * 
+ *
  * @returns {Promise<void>} Resolves when Razorpay SDK is loaded and ready
  * @throws {Error} If script fails to load
  */
@@ -40,26 +40,30 @@ export const loadRazorpayScript = () => {
       return;
     }
 
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
     script.async = true;
-    script.type = 'text/javascript';
+    script.type = "text/javascript";
 
     script.onload = () => {
       if (window.Razorpay) {
         resolve();
       } else {
-        reject(new Error('Razorpay SDK loaded but window.Razorpay not found'));
+        reject(new Error("Razorpay SDK loaded but window.Razorpay not found"));
       }
     };
 
     script.onerror = () => {
       razorpayScriptPromise = null; // Reset on error to allow retry
-      reject(new Error('Failed to load Razorpay SDK. Check your internet connection.'));
+      reject(
+        new Error(
+          "Failed to load Razorpay SDK. Check your internet connection.",
+        ),
+      );
     };
 
     // Add error handler for network issues
-    script.addEventListener('error', () => {
+    script.addEventListener("error", () => {
       razorpayScriptPromise = null;
     });
 
@@ -72,7 +76,12 @@ export const loadRazorpayScript = () => {
 
 /**
  * Initialize Razorpay checkout with order details
- * 
+ *
+ * FIX: Removed async executor anti-pattern
+ * - Async executors break promise semantics and can cause stack overflow
+ * - Added handler deduplication flags to prevent recursive calls
+ * - Load script before creating promise to avoid timing issues
+ *
  * @param {Object} config - Razorpay configuration
  * @param {string} config.key_id - Razorpay Key ID from backend
  * @param {number} config.amount - Amount in paise
@@ -85,53 +94,83 @@ export const loadRazorpayScript = () => {
  * @param {Function} config.onError - Callback on payment error
  * @returns {Promise<void>}
  */
-export const openRazorpayCheckout = (config) => {
-  return new Promise(async (resolve, reject) => {
-    try {
-      // Load Razorpay script if not already loaded
-      await loadRazorpayScript();
+export const openRazorpayCheckout = async (config) => {
+  // Load Razorpay script BEFORE creating the promise
+  await loadRazorpayScript();
 
-      if (!window.Razorpay) {
-        throw new Error('Razorpay SDK not available');
+  if (!window.Razorpay) {
+    throw new Error("Razorpay SDK not available");
+  }
+
+  return new Promise((resolve, reject) => {
+    // Flags to prevent handler recursion and multiple resolutions
+    let handlerCalled = false;
+    let dismissCalled = false;
+
+    const safeResolve = (value) => {
+      if (!handlerCalled && !dismissCalled) {
+        handlerCalled = true;
+        resolve(value);
       }
+    };
 
+    const safeReject = (error) => {
+      if (!handlerCalled && !dismissCalled) {
+        handlerCalled = true;
+        reject(error);
+      }
+    };
+
+    try {
       const options = {
         key: config.key_id,
         amount: config.amount,
-        currency: config.currency || 'INR',
+        currency: config.currency || "INR",
         order_id: config.order_id,
         name: config.name,
         description: config.description,
         image: config.image,
-        theme: config.theme || { color: '#7BA05B' },
-        
-        handler: async function(response) {
+        theme: config.theme || { color: "#7BA05B" },
+
+        handler: async (response) => {
+          // Guard against duplicate handler calls
+          if (handlerCalled) return;
+          handlerCalled = true;
+
           try {
             if (config.onSuccess) {
               await config.onSuccess(response);
             }
-            resolve(response);
+            safeResolve(response);
           } catch (err) {
-            reject(err);
+            safeReject(err);
           }
         },
 
         modal: {
           ondismiss: () => {
-            reject(new Error('Payment cancelled'));
+            if (!dismissCalled) {
+              dismissCalled = true;
+              safeReject(new Error("Payment cancelled"));
+            }
           },
         },
       };
 
       const rzp = new window.Razorpay(options);
-      
-      rzp.on('payment.failed', (response) => {
-        reject(new Error(response.error?.description || 'Payment failed'));
+
+      rzp.on("payment.failed", (response) => {
+        if (!handlerCalled) {
+          handlerCalled = true;
+          safeReject(
+            new Error(response.error?.description || "Payment failed"),
+          );
+        }
       });
 
       rzp.open();
     } catch (error) {
-      reject(error);
+      safeReject(error);
     }
   });
 };

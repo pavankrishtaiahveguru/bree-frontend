@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Helmet } from "react-helmet-async";
 import { toast } from "sonner";
@@ -26,10 +26,14 @@ import { Label } from "@/components/ui/label";
 const API = `${process.env.REACT_APP_BACKEND_URL || "http://localhost:4000"}/api`;
 
 const normalizeStatus = (status) => {
-  if (!status) return 'pending';
+  if (!status) return "pending";
   const lower = String(status).toLowerCase();
-  if (['processing', 'shipped', 'out_for_delivery', 'dispatched'].includes(lower)) return 'dispatched';
-  if (['pending', 'confirmed', 'delivered', 'cancelled'].includes(lower)) return lower;
+  if (
+    ["processing", "shipped", "out_for_delivery", "dispatched"].includes(lower)
+  )
+    return "dispatched";
+  if (["pending", "confirmed", "delivered", "cancelled"].includes(lower))
+    return lower;
   return lower;
 };
 
@@ -43,8 +47,14 @@ const TABS = [
 function ProfileTab({ user }) {
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
   const [profileData, setProfileData] = useState(null);
   const [form, setForm] = useState({ name: "", email: "", phone: "" });
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
 
   useEffect(() => {
     const fetch = async () => {
@@ -87,6 +97,46 @@ function ProfileTab({ user }) {
     }
   };
 
+  const handlePasswordChange = async () => {
+    if (!passwordForm.currentPassword.trim()) {
+      toast.error("Current password is required.");
+      return;
+    }
+    if (passwordForm.newPassword.length < 8) {
+      toast.error("New password must be at least 8 characters.");
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast.error("Confirm password must match new password.");
+      return;
+    }
+
+    setPasswordLoading(true);
+    try {
+      await axios.patch(
+        `${API}/auth/change-password`,
+        {
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+          confirmPassword: passwordForm.confirmPassword,
+        },
+        { withCredentials: true },
+      );
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+      toast.success("Password updated successfully.");
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message || "Failed to change password.",
+      );
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
   if (!profileData) {
     return (
       <div className="flex justify-center py-16">
@@ -101,8 +151,16 @@ function ProfileTab({ user }) {
         {profileData.picture ? (
           <img
             src={profileData.picture}
-            alt=""
+            alt={profileData.name}
             className="w-16 h-16 rounded-full object-cover"
+            referrerPolicy="no-referrer"
+            onError={(e) => {
+              console.log("Failed image:", profileData.picture);
+
+              e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                profileData.name,
+              )}&background=8BAA5B&color=fff`;
+            }}
           />
         ) : (
           <div className="w-16 h-16 rounded-full bg-bree-accent/40 flex items-center justify-center">
@@ -198,6 +256,83 @@ function ProfileTab({ user }) {
             <Edit2 className="w-4 h-4 mr-2" />
             Edit Profile
           </Button>
+
+          <div className="mt-6 p-5 bg-white rounded-xl border border-bree-border">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-outfit text-lg font-semibold text-bree-text-primary">
+                  Security
+                </h3>
+                <p className="text-sm text-bree-text-secondary">
+                  Change your account password below.
+                </p>
+              </div>
+            </div>
+            {profileData.provider !== "email" ? (
+              <div className="rounded-xl bg-bree-bg p-4 text-sm text-bree-text-secondary">
+                Password is managed by your Google account.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <Label>Current Password</Label>
+                  <Input
+                    type="password"
+                    value={passwordForm.currentPassword}
+                    onChange={(e) =>
+                      setPasswordForm((prev) => ({
+                        ...prev,
+                        currentPassword: e.target.value,
+                      }))
+                    }
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>New Password</Label>
+                  <Input
+                    type="password"
+                    value={passwordForm.newPassword}
+                    onChange={(e) =>
+                      setPasswordForm((prev) => ({
+                        ...prev,
+                        newPassword: e.target.value,
+                      }))
+                    }
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>Confirm Password</Label>
+                  <Input
+                    type="password"
+                    value={passwordForm.confirmPassword}
+                    onChange={(e) =>
+                      setPasswordForm((prev) => ({
+                        ...prev,
+                        confirmPassword: e.target.value,
+                      }))
+                    }
+                    className="mt-1"
+                  />
+                </div>
+                <div className="flex items-center gap-3 pt-2">
+                  <Button
+                    onClick={handlePasswordChange}
+                    disabled={passwordLoading}
+                    className="bg-bree-primary hover:bg-bree-primary-hover text-white"
+                  >
+                    {passwordLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    ) : (
+                      <Save className="w-4 h-4 mr-2" />
+                    )}
+                    Change Password
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -496,19 +631,21 @@ function OrdersTab() {
             </div>
             <div className="flex flex-col items-end gap-2">
               {(() => {
-                const orderStatus = normalizeStatus(order.status || order.order_status);
+                const orderStatus = normalizeStatus(
+                  order.status || order.order_status,
+                );
                 return (
                   <span
                     className={`text-xs px-3 py-1 rounded-full font-medium ${
-                      orderStatus === 'delivered'
-                        ? 'bg-green-100 text-green-700'
-                        : orderStatus === 'dispatched'
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : orderStatus === 'confirmed'
-                            ? 'bg-sky-100 text-sky-700'
-                            : orderStatus === 'cancelled'
-                              ? 'bg-red-100 text-red-600'
-                              : 'bg-gray-100 text-gray-600'
+                      orderStatus === "delivered"
+                        ? "bg-green-100 text-green-700"
+                        : orderStatus === "dispatched"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : orderStatus === "confirmed"
+                            ? "bg-sky-100 text-sky-700"
+                            : orderStatus === "cancelled"
+                              ? "bg-red-100 text-red-600"
+                              : "bg-gray-100 text-gray-600"
                     }`}
                   >
                     {orderStatus}
@@ -571,13 +708,24 @@ function OrdersTab() {
 const Profile = () => {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("profile");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const currentTab = searchParams.get("tab");
+  const activeTab = TABS.some((tab) => tab.id === currentTab)
+    ? currentTab
+    : "profile";
 
   useEffect(() => {
     if (!loading && !user) {
       navigate("/login", { replace: true });
     }
   }, [user, loading, navigate]);
+
+  useEffect(() => {
+    if (!currentTab || !TABS.some((tab) => tab.id === currentTab)) {
+      setSearchParams({ tab: "profile" }, { replace: true });
+    }
+  }, [currentTab, setSearchParams]);
 
   if (loading) {
     return (
@@ -633,7 +781,11 @@ const Profile = () => {
             {TABS.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  const nextParams = new URLSearchParams(searchParams);
+                  nextParams.set("tab", tab.id);
+                  setSearchParams(nextParams);
+                }}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-sm font-medium transition-all ${
                   activeTab === tab.id
                     ? "bg-bree-primary text-white shadow-sm"

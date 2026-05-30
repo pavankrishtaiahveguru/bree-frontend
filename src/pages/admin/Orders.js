@@ -26,19 +26,36 @@ const PAGE_SIZE = 10;
 
 const normalizeStatus = (status) => {
   if (!status) return "pending";
+
   const lower = String(status).toLowerCase();
-  if (["processing", "shipped", "out_for_delivery"].includes(lower))
-    return "dispatched";
+
   if (
-    ["pending", "confirmed", "dispatched", "delivered", "cancelled"].includes(
-      lower,
-    )
-  )
+    [
+      "pending",
+      "confirmed",
+      "processing",
+      "dispatched",
+      "delivered",
+      "cancelled",
+    ].includes(lower)
+  ) {
     return lower;
+  }
+
+  if (["shipped", "out_for_delivery"].includes(lower)) {
+    return "dispatched";
+  }
+
   return lower;
 };
 
-const ORDER_STATUSES = ["pending", "confirmed", "dispatched", "delivered"];
+const ORDER_STATUSES = [
+  "pending",
+  "confirmed",
+  "processing",
+  "dispatched",
+  "delivered",
+];
 
 const DATE_RANGES = [
   { label: "All Time", value: "all" },
@@ -51,6 +68,7 @@ const DATE_RANGES = [
 const STATUS_COLORS = {
   pending: "bg-yellow-100 text-yellow-700 border-yellow-200",
   confirmed: "bg-sky-100 text-sky-700 border-sky-200",
+  processing: "bg-indigo-100 text-indigo-700 border-indigo-200",
   dispatched: "bg-purple-100 text-purple-700 border-purple-200",
   delivered: "bg-green-100 text-green-700 border-green-200",
   cancelled: "bg-red-100 text-red-500 border-red-200",
@@ -58,7 +76,8 @@ const STATUS_COLORS = {
 
 const ORDER_TRANSITIONS = {
   pending: ["pending", "confirmed"],
-  confirmed: ["confirmed", "dispatched"],
+  confirmed: ["confirmed", "processing"],
+  processing: ["processing", "dispatched"],
   dispatched: ["dispatched", "delivered"],
   delivered: ["delivered"],
   cancelled: ["cancelled"],
@@ -217,19 +236,28 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
 
   const orderStatus = normalizeStatus(order.order_status || order.status);
   const timeline = [
-    { label: "Order Placed", done: true },
-    { label: "Payment Confirmed", done: order.payment_status === "paid" },
+    {
+      label: "Order Placed",
+      done: true,
+    },
+    {
+      label: "Confirmed",
+      done: ["confirmed", "processing", "dispatched", "delivered"].includes(
+        orderStatus,
+      ),
+    },
+    {
+      label: "Processing",
+      done: ["processing", "dispatched", "delivered"].includes(orderStatus),
+    },
     {
       label: "Dispatched",
-      done: [
-        "processing",
-        "shipped",
-        "out_for_delivery",
-        "dispatched",
-        "delivered",
-      ].includes(normalizeStatus(order.order_status || order.status)),
+      done: ["dispatched", "delivered"].includes(orderStatus),
     },
-    { label: "Delivered", done: orderStatus === "delivered" },
+    {
+      label: "Delivered",
+      done: orderStatus === "delivered",
+    },
   ];
 
   return (
@@ -298,7 +326,7 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
               </div>
               <div className="text-right">
                 <p className="font-semibold text-bree-text-primary">
-                  ₹{Number(order.amount).toLocaleString()}
+                  ₹{Number(order.total ?? order.amount ?? 0).toLocaleString()}
                 </p>
                 <span
                   className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${
@@ -540,36 +568,52 @@ const Orders = () => {
     setPage(1);
   }, [filterStatus, filterDate, sortField, sortDir]);
 
-  const fetchOrders = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await axios.get(
-        `${API}/orders?search=${encodeURIComponent(searchQuery)}&page=${page}&limit=${PAGE_SIZE}&sort=${sortField}&dir=${sortDir}&order_status=${filterStatus}&date=${filterDate}`,
-        AUTH(),
-      );
-      setOrders(res.data?.orders || []);
-      setTotal(res.data?.total || 0);
-    } catch {
-      setOrders([]);
-      setTotal(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [searchQuery, page, sortField, sortDir, filterStatus, filterDate]);
+  const fetchOrders = useCallback(
+    async (signal) => {
+      setLoading(true);
+      try {
+        const res = await axios.get(
+          `${API}/orders?search=${encodeURIComponent(searchQuery)}&page=${page}&limit=${PAGE_SIZE}&sort=${sortField}&dir=${sortDir}&order_status=${filterStatus}&date=${filterDate}`,
+          { ...AUTH(), signal },
+        );
+        setOrders(res.data?.orders || []);
+        setTotal(res.data?.total || 0);
+      } catch (err) {
+        // Ignore cancellation errors — they're expected from StrictMode double-invoke
+        if (
+          axios.isCancel(err) ||
+          err?.name === "CanceledError" ||
+          err?.code === "ERR_CANCELED"
+        )
+          return;
+        setOrders([]);
+        setTotal(0);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [searchQuery, page, sortField, sortDir, filterStatus, filterDate],
+  );
 
   useEffect(() => {
-    fetchOrders();
+    const controller = new AbortController();
+    fetchOrders(controller.signal);
+    return () => controller.abort();
   }, [fetchOrders]);
 
   // Real-time sync: update orders when server sends 'order:updated'
-  useOrdersSync((updated) => {
+  // Stable reference via useCallback so the socket listener is not torn down
+  // and re-added on every render.
+  const handleOrderSync = useCallback((updated) => {
     setOrders((prev) =>
       prev.map((o) => (o.id === updated.id ? { ...o, ...updated } : o)),
     );
     setSelected((prev) =>
       prev && prev.id === updated.id ? { ...prev, ...updated } : prev,
     );
-  });
+  }, []); // no deps — only uses state setters which are stable
+
+  useOrdersSync(handleOrderSync);
 
   /* status update (optimistic + API) */
   const applyStatusChange = useCallback(

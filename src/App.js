@@ -13,6 +13,7 @@ const Benefits = lazy(() => import("@/pages/Benefits"));
 const Contact = lazy(() => import("@/pages/Contact"));
 const Checkout = lazy(() => import("@/pages/Checkout"));
 const CheckoutSuccess = lazy(() => import("@/pages/CheckoutSuccess"));
+const OrderSuccess = lazy(() => import("@/pages/OrderSuccess"));
 const Login = lazy(() => import("@/pages/Login"));
 const Register = lazy(() => import("@/pages/Register")); // FIX: Register page was imported in routes but missing lazy import
 const Profile = lazy(() => import("@/pages/Profile"));
@@ -149,6 +150,7 @@ function AppRouter() {
             }
           />
           <Route path="/checkout/success" element={<CheckoutSuccess />} />
+          <Route path="/order-success" element={<OrderSuccess />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route

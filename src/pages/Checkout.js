@@ -6,10 +6,11 @@ import { Button } from "@/components/ui/button";
 import axios from "@/lib/api";
 import { toast } from "sonner";
 import { openRazorpayCheckout } from "@/lib/razorpayLoader";
+import CartUpdateModal from "@/components/CartUpdateModal";
 
 const Checkout = () => {
   const navigate = useNavigate();
-  const { cartItems, cartTotal, clearCart } = useCart();
+  const { cartItems, cartTotal, clearCart, syncCart } = useCart();
 
   // State
   const [step, setStep] = useState("validate"); // validate, address, contact, summary, payment, confirm
@@ -35,31 +36,26 @@ const Checkout = () => {
   const [isValidating, setIsValidating] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [orderCreated, setOrderCreated] = useState(null);
+  const [showCartModal, setShowCartModal] = useState(false);
+  const [cartModalItems, setCartModalItems] = useState([]);
+  const [acceptedChanges, setAcceptedChanges] = useState(false);
 
   // Validate cart and load addresses — defined BEFORE the useEffect that calls it
   const validateAndLoadData = useCallback(async () => {
     setIsValidating(true);
 
     try {
-      // 1. Validate cart
-      const validationResponse = await axios.post("/api/orders/validate-cart", {
-        cartItems: cartItems.map((item) => ({
-          id: item.id,
-          quantity: item.quantity,
-          price: item.price,
-        })),
-      });
-
-      setCartValidation(validationResponse.data);
-
-      if (!validationResponse.data.valid) {
-        toast.error("Your cart has items that need attention");
-
-        setStep("cart-update");
-
-        setIsValidating(false);
-
-        return;
+      // 1. Sync cart with backend
+      if (typeof syncCart === "function") {
+        const syncRes = await syncCart();
+        if (syncRes && syncRes.anyChange) {
+          toast.error(
+            "Product price has changed. Cart has been updated with the latest price.",
+          );
+          setStep("cart-update");
+          setIsValidating(false);
+          return;
+        }
       }
 
       // 2. Fetch addresses
@@ -98,10 +94,13 @@ const Checkout = () => {
 
   // Fetch user data on mount — useEffect is AFTER the callback it references
   useEffect(() => {
-    if (!cartItems.length) {
+    const isOrderSuccessPage = window.location.pathname === "/order-success";
+
+    if (!cartItems.length && !isOrderSuccessPage) {
       navigate("/shop");
       return;
     }
+
     validateAndLoadData();
   }, [cartItems.length, navigate, validateAndLoadData]);
 
@@ -183,6 +182,7 @@ const Checkout = () => {
   };
 
   const handleConfirmOrder = async () => {
+    // Early validation guards
     if (!cartItems.length) {
       toast.error("Your cart is empty.");
       return;
@@ -193,26 +193,35 @@ const Checkout = () => {
       return;
     }
 
+    // Prevent multiple simultaneous calls
+    if (isLoading) {
+      return;
+    }
+
+    setIsLoading(true);
+
     try {
-      setIsLoading(true);
+      // STEP 1: Re-validate latest cart against backend
+      const syncResult = await syncCart();
 
-      // STEP 1: Validate latest cart prices before payment
-      const validationResponse = await axios.post("/api/orders/validate-cart", {
-        cartItems: cartItems.map((item) => ({
-          id: item.id,
-          quantity: item.quantity,
-          price: item.price,
-        })),
-      });
-
-      if (!validationResponse.data.valid) {
-        toast.error(
-          "Some product prices changed. Please review your cart again.",
+      if (syncResult && syncResult.anyChange && !acceptedChanges) {
+        // show modal with details and wait for user action
+        const interesting = syncResult.items.filter(
+          (i) =>
+            i.priceChanged ||
+            i.outOfStock ||
+            i.insufficientStock ||
+            !i.available,
         );
+        setCartModalItems(interesting);
+        setShowCartModal(true);
+        setIsLoading(false);
+        return; // wait for modal
+      }
 
-        setCartValidation(validationResponse.data);
-        setStep("summary");
-        return;
+      // If user already accepted changes via modal, reset flag and continue
+      if (acceptedChanges) {
+        setAcceptedChanges(false);
       }
 
       const selectedAddressObject = addresses.find(
@@ -240,9 +249,11 @@ const Checkout = () => {
         toast.error(
           "Unable to resolve shipping address. Please choose another address.",
         );
+        setIsLoading(false);
         return;
       }
 
+      // STEP 2: Create payment order
       const paymentResponse = await axios.post("/api/payment/create-order", {
         amount: cartTotal,
         currency: "INR",
@@ -260,64 +271,123 @@ const Checkout = () => {
 
       const razorpayOrder = paymentResponse.data;
 
+      // STEP 3: Load Razorpay script
       const razorpayLoaded = await loadRazorpay();
 
       if (!razorpayLoaded) {
-        setIsLoading(false);
         toast.error("Failed to load payment gateway");
+        setIsLoading(false);
         return;
       }
 
-      await openRazorpayCheckout({
-        key_id: razorpayOrder.key_id || process.env.REACT_APP_RAZORPAY_KEY_ID,
-        amount: razorpayOrder.amount,
-        currency: razorpayOrder.currency,
-        name: "BREE Wellness",
-        description: "Order Payment",
-        order_id: razorpayOrder.razorpay_order_id || razorpayOrder.id,
-        prefill: {
-          name: contactInfo.name,
-          email: contactInfo.email,
-          contact: contactInfo.phone,
-        },
-        theme: {
-          color: "#84A95A",
-        },
-        onSuccess: async (response) => {
-          const verifyResponse = await axios.post("/api/payment/verify", {
-            razorpay_order_id: response.razorpay_order_id,
-            razorpay_payment_id: response.razorpay_payment_id,
-            razorpay_signature: response.razorpay_signature,
-          });
+      // STEP 4: Open Razorpay checkout with isolated error handling
+      try {
+        await openRazorpayCheckout({
+          key_id: razorpayOrder.key_id || process.env.REACT_APP_RAZORPAY_KEY_ID,
+          amount: razorpayOrder.amount,
+          currency: razorpayOrder.currency,
+          name: "BREE Wellness",
+          description: "Order Payment",
+          order_id: razorpayOrder.razorpay_order_id || razorpayOrder.id,
+          prefill: {
+            name: contactInfo.name,
+            email: contactInfo.email,
+            contact: contactInfo.phone,
+          },
+          theme: {
+            color: "#84A95A",
+          },
+          onSuccess: async (response) => {
+            try {
+              // Verify payment signature
+              const verifyResponse = await axios.post("/api/payment/verify", {
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              });
 
-          if (!verifyResponse.data.success) {
-            throw new Error(
-              verifyResponse.data.message || "Payment verification failed.",
-            );
-          }
+              if (!verifyResponse.data.success) {
+                throw new Error(
+                  verifyResponse.data.message || "Payment verification failed.",
+                );
+              }
 
-          const savedOrderId = verifyResponse.data.order_id;
-          if (!savedOrderId) {
-            throw new Error(
-              "Could not resolve order after payment verification.",
-            );
-          }
+              const savedOrderId = verifyResponse.data.order_id;
+              if (!savedOrderId) {
+                throw new Error(
+                  "Could not resolve order after payment verification.",
+                );
+              }
 
-          clearCart();
-          navigate(`/checkout/success?order_id=${savedOrderId}`);
-        },
-      });
+              // Clear cart and navigate with replace to prevent back navigation
+              navigate(`/order-success?orderId=${savedOrderId}`, {
+                replace: true,
+              });
+              console.log(
+                "SUCCESS REDIRECT:",
+                `/order-success?orderId=${savedOrderId}`,
+              );
+
+              setTimeout(() => {
+                clearCart();
+              }, 500);
+            } catch (verifyError) {
+              console.error(
+                "Payment verification error:",
+                verifyError.response?.data || verifyError,
+              );
+              toast.error(
+                verifyError.response?.data?.message ||
+                  verifyError.message ||
+                  "Payment verification failed. Please contact support.",
+              );
+              setIsLoading(false);
+            }
+          },
+        });
+      } catch (checkoutError) {
+        // Razorpay checkout error or user cancelled
+        if (checkoutError?.message === "Payment cancelled") {
+          toast.info("Payment cancelled. You can retry anytime.");
+        } else {
+          console.error(
+            "Razorpay checkout error:",
+            checkoutError.response?.data || checkoutError,
+          );
+          toast.error(
+            checkoutError.message ||
+              "Failed to process payment. Please try again.",
+          );
+        }
+        setIsLoading(false);
+      }
     } catch (error) {
-      console.error("Order creation error:", error.response?.data || error);
+      // API or general errors
+      console.error(
+        "Order creation error:",
+        error.response?.data || error.message,
+      );
       toast.error(
         error.response?.data?.message ||
           error.response?.data?.error ||
           error.message ||
           "Failed to initialize payment",
       );
-    } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleAcceptChanges = async () => {
+    setShowCartModal(false);
+    setAcceptedChanges(true);
+    // re-run confirmation flow
+    await handleConfirmOrder();
+  };
+
+  const handleReviewChanges = () => {
+    setShowCartModal(false);
+    setStep("summary");
+    toast.info("Please review your cart before proceeding.");
   };
 
   // Loading state
@@ -869,6 +939,13 @@ const Checkout = () => {
           </div>
         </div>
       </div>
+      <CartUpdateModal
+        visible={showCartModal}
+        items={cartModalItems}
+        onAccept={handleAcceptChanges}
+        onReview={handleReviewChanges}
+        onClose={() => setShowCartModal(false)}
+      />
     </div>
   );
 };

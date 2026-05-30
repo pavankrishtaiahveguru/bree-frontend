@@ -109,7 +109,7 @@ const AdminLogin = () => {
                   type="email"
                   value={form.email}
                   onChange={handleChange}
-                  placeholder="admin@bree.fit"
+                  placeholder="Enter your email"
                   autoComplete="email"
                   className="pl-11 h-12 rounded-xl border-bree-border focus:border-bree-primary"
                 />
@@ -132,7 +132,7 @@ const AdminLogin = () => {
                   type={showPassword ? "text" : "password"}
                   value={form.password}
                   onChange={handleChange}
-                  placeholder="••••••••"
+                  placeholder="Enter your password"
                   autoComplete="current-password"
                   className="pl-11 pr-11 h-12 rounded-xl border-bree-border focus:border-bree-primary"
                 />

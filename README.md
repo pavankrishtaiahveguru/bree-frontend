@@ -1,6 +1,6 @@
 # Frontend Setup Guide
 
-React 19 customer and admin dashboard for BREE e-commerce platform.
+React storefront and admin dashboard for the BREE Wellness E-Commerce Platform.
 
 ## Table of Contents
 
@@ -8,40 +8,60 @@ React 19 customer and admin dashboard for BREE e-commerce platform.
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [Setup Instructions](#setup-instructions)
+- [Environment Variables](#environment-variables)
 - [Pages & Routes](#pages--routes)
-- [Components](#components)
-- [State Management](#state-management)
-- [Performance Optimizations](#performance-optimizations)
 - [Available Scripts](#available-scripts)
+- [Related Documentation](#related-documentation)
 
 ---
 
 ## Overview
 
-The BREE frontend is a full-featured React application providing:
+The frontend delivers a complete wellness shopping experience with:
 
-- **Customer Portal**: Product browsing, cart, checkout, order tracking
-- **User Accounts**: Registration, profile management, address management
-- **Admin Dashboard**: Complete business operations management
-- **Responsive Design**: Optimized for mobile, tablet, and desktop
-- **Real-time Notifications**: Toast notifications for user actions
+- Product browsing, search, and filtering
+- Cart management with smart recommendations
+- Razorpay checkout flow
+- Order success and tracking pages
+- Profile and order history pages
+- Admin dashboard for product, order, and customer management
+- Fully responsive UI for mobile and desktop
 
 ---
 
 ## Tech Stack
 
-### Core Dependencies
+- React
+- React Router
+- Tailwind CSS
+- Axios
+- Sonner
+- Lucide React
+- Firebase authentication
+- Cloudinary image hosting
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| React | 19 | UI framework |
-| React Router | v7 | Client-side routing |
-| Tailwind CSS | 3.x | Styling framework |
-| Axios | 1.x | HTTP client |
-| React Helmet | 6.x | SEO management |
-| Shadcn/ui | Latest | Component library |
-| Lucide React | Latest | Icon library |
-| Sonner | Latest | Toast notifications |
+---
+
+## Project Structure
+
+```
+frontend/
+├── src/
+│   ├── components/          # Reusable UI components
+│   │   ├── admin/           # Admin-specific components
+│   │   ├── orders/          # Order and checkout components
+│   │   └── ui/              # Base UI primitives
+│   ├── context/             # Auth and cart state management
+│   ├── data/                # Static data and helpers
+│   ├── hooks/               # Custom hooks
+│   ├── lib/                 # API helpers and utilities
+│   ├── pages/               # Page-level views
+│   ├── App.js               # Root application and routing
+│   └── index.js             # React entry point
+├── public/                  # Public assets
+├── package.json
+└── README.md
+```
 
 ---
 
@@ -49,131 +69,104 @@ The BREE frontend is a full-featured React application providing:
 
 ### Prerequisites
 
-- Node.js 18+ (LTS recommended)
+- Node.js 18+
 - npm or yarn
-- Git
-- Backend API running on `http://localhost:5000`
+- Backend API running on `http://localhost:4000`
 
-### 1. Install Dependencies
+### Install Dependencies
 
 ```bash
 cd frontend
 npm install
 ```
 
-### 2. Environment Configuration
+### Environment Configuration
 
-Create `.env.local` file in the `frontend/` directory:
+Create `frontend/.env.local`:
 
 ```env
-REACT_APP_BACKEND_URL=http://localhost:5000
+REACT_APP_BACKEND_URL=http://localhost:4000
 REACT_APP_RAZORPAY_KEY=your_razorpay_public_key
 REACT_APP_FIREBASE_API_KEY=your_firebase_api_key
 REACT_APP_FIREBASE_AUTH_DOMAIN=your_firebase_auth_domain
 REACT_APP_FIREBASE_PROJECT_ID=your_firebase_project_id
-REACT_APP_FIREBASE_STORAGE_BUCKET=your_storage_bucket
+REACT_APP_FIREBASE_STORAGE_BUCKET=your_firebase_storage_bucket
 REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
 REACT_APP_FIREBASE_APP_ID=your_firebase_app_id
 ```
 
-### 3. Start Development Server
+### Start Development Server
 
 ```bash
 npm run dev
 ```
 
-Frontend runs at: `http://localhost:3000`
-
-### 4. Build for Production
-
-```bash
-npm run build
-```
+The frontend runs at `http://localhost:3000`.
 
 ---
 
-## Project Structure
+## Environment Variables
 
-```
-frontend/src/
-├── components/              # Reusable UI components
-│   ├── admin/              # Admin-specific components
-│   └── ui/                 # Base UI components
-├── context/                # React Context (Auth, Cart)
-├── pages/                  # Page components
-│   └── admin/              # Admin pages
-├── hooks/                  # Custom React hooks
-├── lib/                    # Utilities (api, firebase, etc)
-├── App.js                  # Root component & routing
-└── index.js                # Entry point
-```
+Required variables:
+
+- `REACT_APP_BACKEND_URL`
+- `REACT_APP_RAZORPAY_KEY`
+- `REACT_APP_FIREBASE_API_KEY`
+- `REACT_APP_FIREBASE_AUTH_DOMAIN`
+- `REACT_APP_FIREBASE_PROJECT_ID`
+- `REACT_APP_FIREBASE_STORAGE_BUCKET`
+- `REACT_APP_FIREBASE_MESSAGING_SENDER_ID`
+- `REACT_APP_FIREBASE_APP_ID`
 
 ---
 
 ## Pages & Routes
 
 ### Public Routes
-- `/` - Landing page
-- `/shop` - Product catalog
-- `/about`, `/benefits` - Info pages
+
+- `/` - Home and product catalog
+- `/shop` - Product listings
+- `/about` - Brand and benefits
 - `/contact` - Contact form
-- `/login`, `/register` - Authentication
+- `/login` - Login page
+- `/register` - Registration page
 
-### User Routes (Protected)
+### Customer Routes
+
 - `/profile` - User profile
-- `/checkout` - Order checkout
+- `/checkout` - Checkout flow
+- `/order-success` - Order confirmation
+- `/orders` - Order history
 
-### Admin Routes (Protected)
-- `/admin` - Dashboard
+### Admin Routes
+
+- `/admin` - Admin dashboard
 - `/admin/products` - Product management
 - `/admin/orders` - Order management
-- `/admin/customers` - Customer directory
-- `/admin/testimonials` - Review moderation
-
----
-
-## State Management
-
-### AuthContext
-```javascript
-const { user, loading, loginWithGoogle, logout, checkAuth } = useAuth();
-```
-
-### CartContext
-```javascript
-const { cart, addToCart, removeFromCart, cartTotal } = useCart();
-```
-
----
-
-## Performance Optimizations
-
-- Code splitting with lazy loading
-- Cloudinary CDN for images
-- Response caching with TTL
-- Bundle optimization via Tailwind
-- Axios interceptors for auth
+- `/admin/customers` - Customer management
+- `/admin/testimonials` - Testimonials moderation
 
 ---
 
 ## Available Scripts
 
 ```bash
-npm run dev              # Start dev server
-npm run build           # Production build
-npm run lint            # Lint code
-npm start              # CRA dev server
+npm run dev
+npm run build
+npm run test
 ```
 
 ---
 
 ## Related Documentation
 
-- [Root README](../README.md) - Project overview
-- [Backend README](../backend/README.md) - API setup
-- [API Reference](../docs/API.md) - Endpoints
-- [Deployment Guide](../docs/DEPLOYMENT.md) - Production
+- [Root README](../README.md)
+- [Backend README](../backend/README.md)
+- [API Reference](../docs/API.md)
+- [Deployment Guide](../docs/DEPLOYMENT.md)
 
 ---
 
-**Last Updated:** May 2026
+## Last Updated
+
+May 2026

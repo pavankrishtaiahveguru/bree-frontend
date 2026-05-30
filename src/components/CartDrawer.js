@@ -22,6 +22,8 @@ const CartDrawer = ({ isOpen, onClose }) => {
     removeFromCart,
     updateQuantity,
     clearCart,
+    syncCart,
+    pendingChanges,
   } = useCart();
 
   const navigate = useNavigate();
@@ -32,6 +34,12 @@ const CartDrawer = ({ isOpen, onClose }) => {
 
   const primaryProductId = useMemo(() => cartItems[0]?.id, [cartItems]);
   const primaryProduct = useMemo(() => cartItems[0], [cartItems]);
+
+  // Get cart product IDs to exclude from recommendations
+  const cartProductIds = useMemo(
+    () => new Set(cartItems.map((item) => item.id)),
+    [cartItems],
+  );
 
   // Fetch recommendations based on primary product
   useEffect(() => {
@@ -49,10 +57,19 @@ const CartDrawer = ({ isOpen, onClose }) => {
           `/api/products/${primaryProductId}/recommendations`,
           { signal: controller.signal },
         );
-        setRecommendations(Array.isArray(response.data) ? response.data : []);
+
+
+        // Filter out products already in cart
+        const filteredRecs = Array.isArray(response.data)
+          ? response.data.filter((rec) => !cartProductIds.has(rec.id))
+          : [];
+
+       
+
+        setRecommendations(filteredRecs);
       } catch (error) {
         if (error.name !== "CanceledError") {
-          console.warn("Failed to load recommendations:", error);
+          console.error("❌ Failed to load recommendations:", error.message);
         }
         setRecommendations([]);
       } finally {
@@ -63,7 +80,7 @@ const CartDrawer = ({ isOpen, onClose }) => {
     fetchRecommendations();
 
     return () => controller.abort();
-  }, [primaryProductId]);
+  }, [primaryProductId, cartProductIds]);
 
   // Handle product upgrade - replace instead of add
   const handleUpgradeProduct = useCallback(
@@ -92,7 +109,7 @@ const CartDrawer = ({ isOpen, onClose }) => {
           setIsReplacingProduct(false);
         }, 300); // Smooth transition delay
       } catch (error) {
-        console.error("Upgrade failed:", error);
+        console.error("❌ Upgrade failed:", error);
         toast.error("Failed to upgrade product");
         setIsReplacingProduct(false);
       }
@@ -121,7 +138,7 @@ const CartDrawer = ({ isOpen, onClose }) => {
       toast.error("Add at least one product before checkout.");
       return;
     }
-    
+
     // Close drawer and navigate to checkout
     onClose();
     navigate("/checkout");
@@ -130,6 +147,12 @@ const CartDrawer = ({ isOpen, onClose }) => {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
+      // refresh cart when opening drawer
+      (async () => {
+        try {
+          await syncCart();
+        } catch (e) {}
+      })();
     } else {
       document.body.style.overflow = "auto";
     }
@@ -175,6 +198,13 @@ const CartDrawer = ({ isOpen, onClose }) => {
 
         {/* Main Content */}
         <div className="flex-1 overflow-y-auto">
+          {/* Pending changes banner */}
+          {pendingChanges && pendingChanges.length > 0 && (
+            <div className="mx-5 mt-4 p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-sm text-yellow-800">
+              Product price/stock updates were detected and your cart was
+              updated.
+            </div>
+          )}
           {cartItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-4 py-16 text-center px-6">
               <ShoppingBag className="w-16 h-16 text-bree-border" />
@@ -222,9 +252,21 @@ const CartDrawer = ({ isOpen, onClose }) => {
                         <h3 className="font-semibold text-sm text-bree-text-primary truncate">
                           {item.name}
                         </h3>
-                        <p className="text-xs text-bree-text-secondary mt-1">
-                          ₹{Number(item.price).toLocaleString("en-IN")}
-                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="text-xs text-bree-text-secondary">
+                            ₹{Number(item.price).toLocaleString("en-IN")}
+                          </p>
+                          {item._priceChanged && (
+                            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">
+                              Price Updated
+                            </span>
+                          )}
+                          {item._unavailable && (
+                            <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                              Unavailable
+                            </span>
+                          )}
+                        </div>
 
                         {/* Quantity Controls */}
                         <div className="mt-2 flex items-center gap-1.5">
