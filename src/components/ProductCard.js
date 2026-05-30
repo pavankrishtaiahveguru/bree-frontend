@@ -11,9 +11,16 @@ const ProductCard = ({ product, index = 0 }) => {
 
   const [isAdded, setIsAdded] = useState(false);
 
-  const mrp = Number(product.mrp || product.mrp_price || product.originalPrice || product.price || 0);
+  const mrp = Number(
+    product.mrp ||
+      product.mrp_price ||
+      product.originalPrice ||
+      product.price ||
+      0,
+  );
   const price = Number(product.price || 0);
-  const discountPercentage = mrp > 0 ? Math.round(((mrp - price) / mrp) * 100) : 0;
+  const discountPercentage =
+    mrp > 0 ? Math.round(((mrp - price) / mrp) * 100) : 0;
 
   const isOutOfStock = product.status === "Out Of Stock";
 
@@ -53,7 +60,8 @@ const ProductCard = ({ product, index = 0 }) => {
       }`}
     >
       {/* Popular Badge */}
-      {product.popular && (
+
+      {product.popular === 1 && (
         <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10">
           <span className="bg-bree-primary text-white px-4 py-1.5 rounded-full text-[10px] md:text-xs font-semibold tracking-wide shadow-md whitespace-nowrap">
             MOST POPULAR
@@ -70,9 +78,12 @@ const ProductCard = ({ product, index = 0 }) => {
         )}
 
         <img
-          src={product.image || '/images/default-product.png'}
+          src={product.image || "/images/default-product.png"}
           alt={product.name}
-          onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/images/default-product.png'; }}
+          onError={(e) => {
+            e.currentTarget.onerror = null;
+            e.currentTarget.src = "/images/default-product.png";
+          }}
           className="h-32 md:h-44 w-auto object-contain relative z-10 hover:scale-105 transition-transform duration-500"
         />
       </div>
@@ -151,8 +162,8 @@ const ProductCard = ({ product, index = 0 }) => {
             isOutOfStock
               ? "bg-gray-400 cursor-not-allowed opacity-70 text-white"
               : isAdded
-              ? "bg-bree-success text-white"
-              : "bg-bree-primary hover:bg-bree-primary-hover text-white"
+                ? "bg-bree-success text-white"
+                : "bg-bree-primary hover:bg-bree-primary-hover text-white"
           }`}
         >
           {isOutOfStock ? (
