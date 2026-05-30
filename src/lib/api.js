@@ -9,12 +9,13 @@ axios.defaults.headers.common.Accept = "application/json";
 
 axios.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
-    const token = localStorage.getItem("bree_access_token");
+    const token =
+      localStorage.getItem("bree_admin_token") ||
+      localStorage.getItem("bree_access_token");
+
     if (token) {
       config.headers = config.headers || {};
-      if (!config.headers.Authorization) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
+      config.headers.Authorization = `Bearer ${token}`;
     }
   }
 

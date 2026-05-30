@@ -57,8 +57,10 @@ export const AdminAuthProvider = ({ children }) => {
         password,
       });
       setAdmin(data.admin || null);
-      // Store a flag so reload knows to verify the session
-      localStorage.setItem(ADMIN_TOKEN_KEY, "1");
+
+      // Store actual JWT token
+      localStorage.setItem(ADMIN_TOKEN_KEY, data.token);
+
       return data.admin;
     } catch (error) {
       throw error;
