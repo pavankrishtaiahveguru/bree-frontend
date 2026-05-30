@@ -78,7 +78,11 @@ const ProductCard = ({ product, index = 0 }) => {
         )}
 
         <img
-          src={product.image || "/images/default-product.png"}
+          src={
+            product.image && product.image.trim()
+              ? product.image
+              : "/images/default-product.png"
+          }
           alt={product.name}
           onError={(e) => {
             e.currentTarget.onerror = null;
@@ -108,13 +112,17 @@ const ProductCard = ({ product, index = 0 }) => {
 
         {/* Features */}
         <ul className="space-y-2 pt-5">
-          {product.features?.map((feature) => (
+          {(Array.isArray(product.features)
+            ? product.features
+            : typeof product.features === "string"
+              ? JSON.parse(product.features || "[]")
+              : []
+          ).map((feature, index) => (
             <li
-              key={feature}
+              key={index}
               className="flex items-center justify-center gap-2 text-sm md:text-base text-bree-text-secondary"
             >
               <Check className="w-4 h-4 text-bree-primary flex-shrink-0" />
-
               {feature}
             </li>
           ))}
