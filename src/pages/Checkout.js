@@ -90,7 +90,7 @@ const Checkout = () => {
 
       setIsValidating(false);
     }
-  }, [cartItems]);
+  }, [syncCart]);
 
   // Fetch user data on mount — useEffect is AFTER the callback it references
   useEffect(() => {

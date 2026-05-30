@@ -58,13 +58,10 @@ const CartDrawer = ({ isOpen, onClose }) => {
           { signal: controller.signal },
         );
 
-
         // Filter out products already in cart
         const filteredRecs = Array.isArray(response.data)
           ? response.data.filter((rec) => !cartProductIds.has(rec.id))
           : [];
-
-       
 
         setRecommendations(filteredRecs);
       } catch (error) {
@@ -160,7 +157,7 @@ const CartDrawer = ({ isOpen, onClose }) => {
     return () => {
       document.body.style.overflow = "auto";
     };
-  }, [isOpen]);
+  }, [isOpen, syncCart]);
 
   return (
     <div
