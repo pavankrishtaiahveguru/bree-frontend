@@ -44,27 +44,22 @@ export const AuthProvider = ({ children }) => {
   };
 
   const checkAuth = useCallback(async () => {
-    setLoading(true);
-    try {
-      const storedToken = localStorage.getItem(ACCESS_TOKEN_KEY);
-      if (!storedToken) {
-        setUser(null);
-        setLoading(false);
-        return;
-      }
-
-      const response = await axios.get("/api/auth/verify");
-      setUser(response.data);
-      if (response.data?.accessToken) {
-        localStorage.setItem(ACCESS_TOKEN_KEY, response.data.accessToken);
-      }
-    } catch {
-      setUser(null);
-      localStorage.removeItem(ACCESS_TOKEN_KEY);
-    } finally {
-      setLoading(false);
+  setLoading(true);
+  try {
+    // Always verify via cookie — don't gate on localStorage
+    const response = await axios.get("/api/auth/verify");
+    setUser(response.data);
+    if (response.data?.accessToken) {
+      localStorage.setItem(ACCESS_TOKEN_KEY, response.data.accessToken);
     }
-  }, []);
+  } catch {
+    // Verify failed — user is not logged in
+    setUser(null);
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+  } finally {
+    setLoading(false);
+  }
+}, []);
 
   useEffect(() => {
     checkAuth();

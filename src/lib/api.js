@@ -9,16 +9,17 @@ axios.defaults.headers.common.Accept = "application/json";
 
 axios.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
-    const token =
-      localStorage.getItem("bree_admin_token") ||
-      localStorage.getItem("bree_access_token");
+    const requestPath = getRequestPath(config.url);
 
-    if (token) {
-      config.headers = config.headers || {};
-      config.headers.Authorization = `Bearer ${token}`;
+    // Only send token for admin routes — user routes use cookies only
+    if (requestPath.startsWith("/api/admin")) {
+      const adminToken = localStorage.getItem("bree_admin_token");
+      if (adminToken) {
+        config.headers = config.headers || {};
+        config.headers.Authorization = `Bearer ${adminToken}`;
+      }
     }
   }
-
   config.withCredentials = true;
   return config;
 });
@@ -46,17 +47,20 @@ axios.interceptors.response.use(
 
     if (error.response.status === 401) {
       const requestPath = getRequestPath(error.config?.url);
-      const logoutPaths = [
-        "/api/auth/",
-        "/api/profile",
-        "/api/addresses",
-        "/api/orders",
-      ];
-      if (logoutPaths.some((path) => requestPath.startsWith(path))) {
+
+      // Don't fire auth:expired for the verify endpoint itself
+      // — that just means user is not logged in, not that session expired
+      const isVerifyCall = requestPath === "/api/auth/verify";
+
+      const logoutPaths = ["/api/profile", "/api/addresses", "/api/orders"];
+
+      if (
+        !isVerifyCall &&
+        logoutPaths.some((path) => requestPath.startsWith(path))
+      ) {
         window.dispatchEvent(new Event("auth:expired"));
       }
     }
-
     const backendMessage = error.response.data?.message;
     if (backendMessage) {
       error.message = backendMessage;
