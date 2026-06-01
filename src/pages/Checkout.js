@@ -19,8 +19,8 @@ const Checkout = () => {
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [newAddress, setNewAddress] = useState({
     label: "Home",
-    line1: "",
-    line2: "",
+    address_line1: "",
+    address_line2: "",
     city: "",
     state: "",
     pincode: "",
@@ -62,11 +62,13 @@ const Checkout = () => {
       const addressResponse = await axios.get("/api/addresses");
 
       setAddresses(addressResponse.data);
-
+      
       const defaultAddr = addressResponse.data.find((a) => a.is_default);
-
+      // Auto-select default OR first address if only one exists
       if (defaultAddr) {
         setSelectedAddress(defaultAddr.id);
+      } else if (addressResponse.data.length === 1) {
+        setSelectedAddress(addressResponse.data[0].id);
       }
 
       // 3. Fetch profile
@@ -117,8 +119,8 @@ const Checkout = () => {
   };
 
   const handleSaveAddress = async () => {
-    const { line1, city, state, pincode, country } = newAddress;
-    if (!line1 || !city || !state || !pincode || !country) {
+    const { address_line1, city, state, pincode, country } = newAddress;
+    if (!address_line1 || !city || !state || !pincode || !country) {
       toast.error("Please fill in all required address fields");
       return;
     }
@@ -239,10 +241,10 @@ const Checkout = () => {
 
       const shippingAddress = selectedAddressObject
         ? [
-            selectedAddressObject.line1 ||
+            selectedAddressObject.address_line1 ||
               selectedAddressObject.address_line_1 ||
               selectedAddressObject.addressLine1,
-            selectedAddressObject.line2 ||
+            selectedAddressObject.address_line2 ||
               selectedAddressObject.address_line_2 ||
               selectedAddressObject.addressLine2,
             selectedAddressObject.city,
@@ -528,8 +530,9 @@ const Checkout = () => {
                             {address.label || "Address"}
                           </p>
                           <p className="text-sm text-bree-text-secondary mt-1">
-                            {address.line1}
-                            {address.line2 && `, ${address.line2}`}
+                            {address.address_line1}
+                            {address.address_line2 &&
+                              `, ${address.address_line2}`}
                           </p>
                           <p className="text-sm text-bree-text-secondary">
                             {address.city}, {address.state} {address.pincode}
@@ -579,9 +582,12 @@ const Checkout = () => {
                           </label>
                           <input
                             type="text"
-                            value={newAddress.line1}
+                            value={newAddress.address_line1}
                             onChange={(e) =>
-                              handleNewAddressChange("line1", e.target.value)
+                              handleNewAddressChange(
+                                "address_line1",
+                                e.target.value,
+                              )
                             }
                             className="w-full px-4 py-3 rounded-xl border border-bree-border focus:outline-none focus:border-bree-primary bg-white"
                             placeholder="Flat / building / area"
@@ -595,9 +601,12 @@ const Checkout = () => {
                           </label>
                           <input
                             type="text"
-                            value={newAddress.line2}
+                            value={newAddress.address_line2}
                             onChange={(e) =>
-                              handleNewAddressChange("line2", e.target.value)
+                              handleNewAddressChange(
+                                "address_line2",
+                                e.target.value,
+                              )
                             }
                             className="w-full px-4 py-3 rounded-xl border border-bree-border focus:outline-none focus:border-bree-primary bg-white"
                             placeholder="Landmark"

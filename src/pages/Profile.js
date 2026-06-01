@@ -347,8 +347,8 @@ function AddressesTab() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({
     label: "",
-    line1: "",
-    line2: "",
+    address_line1: "",
+    address_line2: "",
     city: "",
     state: "",
     pincode: "",
@@ -375,8 +375,8 @@ function AddressesTab() {
   const resetForm = () => {
     setForm({
       label: "",
-      line1: "",
-      line2: "",
+      address_line1: "",
+      address_line2: "",
       city: "",
       state: "",
       pincode: "",
@@ -431,8 +431,8 @@ function AddressesTab() {
   const startEdit = (addr) => {
     setForm({
       label: addr.label || "",
-      line1: addr.line1 || "",
-      line2: addr.line2 || "",
+      address_line1: addr.address_line1 || "",
+      address_line2: addr.address_line2 || "",
       city: addr.city || "",
       state: addr.state || "",
       pincode: addr.pincode || "",
@@ -475,8 +475,8 @@ function AddressesTab() {
                   )}
                 </div>
                 <p className="text-sm text-bree-text-secondary">
-                  {addr.line1}
-                  {addr.line2 ? `, ${addr.line2}` : ""}
+                  {addr.address_line1}
+                  {addr.address_line2 ? `, ${addr.address_line2}` : ""}
                   <br />
                   {addr.city}, {addr.state} — {addr.pincode}
                   <br />
@@ -518,12 +518,12 @@ function AddressesTab() {
           {[
             { key: "label", label: "Label (Home, Work…)", placeholder: "Home" },
             {
-              key: "line1",
+              key: "address_line1",
               label: "Address Line 1",
               placeholder: "123 Main Street",
             },
             {
-              key: "line2",
+              key: "address_line2",
               label: "Address Line 2 (optional)",
               placeholder: "Apartment, suite…",
             },
