@@ -112,7 +112,7 @@ const Footer = () => {
               <li className="flex items-start gap-3">
                 <Mail className="w-5 h-5 text-bree-accent mt-0.5" />
                 <span className="text-white/70 text-sm">
-                  bree.fit.india@gmail.com
+                  care@breefit.in
                 </span>
               </li>
               <li className="flex items-start gap-3">

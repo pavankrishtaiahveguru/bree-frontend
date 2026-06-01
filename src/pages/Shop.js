@@ -64,7 +64,7 @@ const Shop = () => {
 
   // Listen for product updates via Socket.IO
   useProductsSync((eventType, product) => {
-    console.log(`🔄 Shop: Product ${eventType}`, product?.id);
+    // console.log(`🔄 Shop: Product ${eventType}`, product?.id);
     // Refetch products to stay in sync
     const refetchProducts = async () => {
       try {

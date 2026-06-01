@@ -78,7 +78,7 @@ const About = () => {
       </Helmet>
 
       {/* Hero Section */}
-      <section className="pt-24 min-h-screen bg-white">
+      <section className="pt-24 py-16 bg-white">
         <div className="max-w-7xl mx-auto px-6 md:px-12">
           <div className="max-w-3xl mx-auto text-center">
             <motion.div
