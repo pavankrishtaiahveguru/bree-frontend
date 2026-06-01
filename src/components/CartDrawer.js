@@ -38,7 +38,8 @@ const CartDrawer = ({ isOpen, onClose }) => {
   // Get cart product IDs to exclude from recommendations
   const cartProductIds = useMemo(
     () => new Set(cartItems.map((item) => item.id)),
-    [cartItems],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cartItems.map((i) => i.id).join(",")],
   );
 
   // Fetch recommendations based on primary product
@@ -77,7 +78,7 @@ const CartDrawer = ({ isOpen, onClose }) => {
     fetchRecommendations();
 
     return () => controller.abort();
-  }, [primaryProductId, cartProductIds]);
+  }, [primaryProductId]);
 
   // Handle product upgrade - replace instead of add
   const handleUpgradeProduct = useCallback(
