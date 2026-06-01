@@ -36,9 +36,11 @@ const getRequestPath = (url) => {
   return url;
 };
 
+let isRefreshing = false;
+
 axios.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (!error.response) {
       error.message =
         "Unable to reach the backend. Check your network or backend server.";
@@ -49,18 +51,36 @@ axios.interceptors.response.use(
       const requestPath = getRequestPath(error.config?.url);
 
       // Don't fire auth:expired for the verify endpoint itself
-      // — that just means user is not logged in, not that session expired
       const isVerifyCall = requestPath === "/api/auth/verify";
+
+      // Don't retry if this request is already a retry
+      const isRetry = error.config?._retry;
 
       const logoutPaths = ["/api/profile", "/api/addresses", "/api/orders"];
 
       if (
         !isVerifyCall &&
+        !isRetry &&
         logoutPaths.some((path) => requestPath.startsWith(path))
       ) {
-        window.dispatchEvent(new Event("auth:expired"));
+        if (!isRefreshing) {
+          isRefreshing = true;
+          try {
+            // Try to refresh session via verify endpoint
+            await axios.get("/api/auth/verify");
+            isRefreshing = false;
+            // Mark as retry and resend original request
+            error.config._retry = true;
+            return axios(error.config);
+          } catch {
+            isRefreshing = false;
+            // Session truly expired — log out
+            window.dispatchEvent(new Event("auth:expired"));
+          }
+        }
       }
     }
+
     const backendMessage = error.response.data?.message;
     if (backendMessage) {
       error.message = backendMessage;
@@ -77,10 +97,12 @@ export const getApiErrorMessage = (error) => {
   if (error.message) return error.message;
   return "An unexpected error occurred. Please refresh and try again.";
 };
+
 export const fetchOrderSuccess = async (orderId) => {
   if (!orderId) {
     throw new Error("Order ID is required");
   }
   return axios.get(`/api/orders/${orderId}/success`);
 };
+
 export default axios;
