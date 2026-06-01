@@ -78,6 +78,7 @@ const CartDrawer = ({ isOpen, onClose }) => {
     fetchRecommendations();
 
     return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [primaryProductId]);
 
   // Handle product upgrade - replace instead of add
