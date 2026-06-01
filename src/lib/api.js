@@ -36,7 +36,24 @@ const getRequestPath = (url) => {
   return url;
 };
 
-let isRefreshing = false;
+// FIX #4: Replace the plain boolean flag with a promise-based refresh queue.
+// When multiple requests fail with 401 at the same time (e.g. GET /api/addresses
+// and GET /api/profile fire concurrently), only the first triggers a token
+// refresh. All subsequent failing requests subscribe to that same refresh
+// promise and are automatically retried once the new token is ready — instead
+// of being silently dropped.
+let refreshPromise = null;
+
+const triggerRefresh = () => {
+  if (!refreshPromise) {
+    refreshPromise = axios.get("/api/auth/verify").finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+};
+
+const logoutPaths = ["/api/profile", "/api/addresses", "/api/orders"];
 
 axios.interceptors.response.use(
   (response) => response,
@@ -56,27 +73,22 @@ axios.interceptors.response.use(
       // Don't retry if this request is already a retry
       const isRetry = error.config?._retry;
 
-      const logoutPaths = ["/api/profile", "/api/addresses", "/api/orders"];
-
       if (
         !isVerifyCall &&
         !isRetry &&
         logoutPaths.some((path) => requestPath.startsWith(path))
       ) {
-        if (!isRefreshing) {
-          isRefreshing = true;
-          try {
-            // Try to refresh session via verify endpoint
-            await axios.get("/api/auth/verify");
-            isRefreshing = false;
-            // Mark as retry and resend original request
-            error.config._retry = true;
-            return axios(error.config);
-          } catch {
-            isRefreshing = false;
-            // Session truly expired — log out
-            window.dispatchEvent(new Event("auth:expired"));
-          }
+        try {
+          // All concurrent 401s share one refresh attempt via triggerRefresh().
+          // The first call starts it; every subsequent call awaits the same promise.
+          await triggerRefresh();
+
+          // Refresh succeeded — retry the original request once
+          error.config._retry = true;
+          return axios(error.config);
+        } catch {
+          // Refresh itself returned 401 — session is truly gone
+          window.dispatchEvent(new Event("auth:expired"));
         }
       }
     }

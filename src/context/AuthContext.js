@@ -44,29 +44,48 @@ export const AuthProvider = ({ children }) => {
   };
 
   const checkAuth = useCallback(async () => {
-  setLoading(true);
-  try {
-    // Always verify via cookie — don't gate on localStorage
-    const response = await axios.get("/api/auth/verify");
-    setUser(response.data);
-    if (response.data?.accessToken) {
-      localStorage.setItem(ACCESS_TOKEN_KEY, response.data.accessToken);
+    setLoading(true);
+    try {
+      // Always verify via cookie — don't gate on localStorage
+      const response = await axios.get("/api/auth/verify");
+      setUser(response.data);
+      if (response.data?.accessToken) {
+        localStorage.setItem(ACCESS_TOKEN_KEY, response.data.accessToken);
+      }
+    } catch {
+      // Verify failed — user is not logged in
+      setUser(null);
+      localStorage.removeItem(ACCESS_TOKEN_KEY);
+    } finally {
+      setLoading(false);
     }
-  } catch {
-    // Verify failed — user is not logged in
-    setUser(null);
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
-  } finally {
-    setLoading(false);
-  }
-}, []);
+  }, []);
 
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
 
+  // FIX #3: auth:expired now does a full graceful logout with loading state
+  // instead of bare setUser(null), preventing abrupt mid-page redirects and
+  // ensuring cookies + refresh tokens are properly revoked on the backend.
   useEffect(() => {
-    const handleAuthExpired = () => setUser(null);
+    const handleAuthExpired = async () => {
+      setLoading(true);
+      try {
+        await axios.post("/api/auth/logout", {});
+      } catch {
+        // Session already gone on the backend — ignore the error
+      }
+      if (firebaseAuth) {
+        firebaseSignOut(firebaseAuth).catch(() => null);
+      }
+      setUser(null);
+      localStorage.removeItem(ACCESS_TOKEN_KEY);
+      broadcastAuthEvent("logout");
+      setLoading(false);
+      toast.error("Your session has expired. Please log in again.");
+    };
+
     const handleStorageEvent = (event) => {
       if (event.key === AUTH_EVENT_KEY && event.newValue) {
         checkAuth();
