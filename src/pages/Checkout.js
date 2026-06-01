@@ -166,6 +166,15 @@ const Checkout = () => {
     });
   };
 
+  // ✅ FIX: validate address before moving to contact step
+  const handleContinueToContact = () => {
+    if (!selectedAddress) {
+      toast.error("Please select a delivery address");
+      return;
+    }
+    setStep("contact");
+  };
+
   // Proceed to order confirmation
   const handleProceedToConfirm = async () => {
     if (!selectedAddress) {
@@ -664,8 +673,9 @@ const Checkout = () => {
                   )}
                 </div>
 
+                {/* ✅ FIX: use handleContinueToContact instead of () => setStep("contact") */}
                 <Button
-                  onClick={() => setStep("contact")}
+                  onClick={handleContinueToContact}
                   className="w-full mt-6 rounded-full bg-bree-primary hover:bg-bree-primary-hover text-white"
                 >
                   Continue to Contact Info
