@@ -15,6 +15,7 @@ const EMPTY_FORM = {
   features: "",
   popular: false,
   status: "In Stock",
+  displayOrder: "",
 };
 
 const validate = (form, imageFile, isEdit) => {
@@ -50,6 +51,7 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
           ...EMPTY_FORM,
           ...initial,
           stockQty: initial.stock_qty ?? initial.stockQty ?? "",
+          displayOrder: initial.display_order ?? initial.displayOrder ?? "",
           features: Array.isArray(initial.features)
             ? initial.features.join(", ")
             : typeof initial.features === "string"
@@ -117,6 +119,8 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
         quantity: Number(form.quantity),
         stockQty: Number(form.stockQty || 0),
         features: form.features || "",
+        displayOrder:
+          form.displayOrder !== "" ? Number(form.displayOrder) : undefined,
         imageFile,
       });
       onClose();
@@ -327,6 +331,29 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
                     placeholder="10"
                     className="w-full h-12 px-4 rounded-2xl border border-bree-border outline-none focus:border-bree-primary"
                   />
+                </div>
+
+                {/* Display Order */}
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-bree-text-primary">
+                    Display Order{" "}
+                    <span className="text-bree-text-secondary font-normal">
+                      (1 = first on shop page)
+                    </span>
+                  </label>
+
+                  <input
+                    type="number"
+                    min="1"
+                    value={form.displayOrder}
+                    onChange={(e) => set("displayOrder", e.target.value)}
+                    placeholder="e.g. 1"
+                    className="w-full h-12 px-4 rounded-2xl border border-bree-border outline-none focus:border-bree-primary"
+                  />
+                  <p className="text-xs text-bree-text-secondary mt-1">
+                    Controls the order products appear on the shop page. Lower
+                    number = shown first.
+                  </p>
                 </div>
 
                 {/* Status */}
