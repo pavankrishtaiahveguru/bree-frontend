@@ -13,6 +13,7 @@ const navLinks = [
   { name: "Shop", path: "/shop" },
   { name: "Benefits", path: "/benefits" },
   { name: "About", path: "/about" },
+  { name: "Bulk", path: "/bulk" },
   { name: "Contact", path: "/contact" },
 ];
 

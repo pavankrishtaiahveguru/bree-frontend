@@ -32,7 +32,7 @@ const Shop = () => {
     if (categories.length > 0 && !category) {
       setCategory(categories[0]);
     }
-  }, [categories]);
+  }, [categories, category]);
 
   // Fetch Products
   useEffect(() => {

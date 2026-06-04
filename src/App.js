@@ -19,12 +19,14 @@ const Register = lazy(() => import("@/pages/Register")); // FIX: Register page w
 const Profile = lazy(() => import("@/pages/Profile"));
 const OrderTracking = lazy(() => import("@/pages/OrderTracking"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
+
 // Admin Pages
 const AdminLogin = lazy(() => import("@/pages/admin/AdminLogin"));
 const AdminDashboard = lazy(() => import("@/pages/admin/AdminDashboard"));
 const Orders = lazy(() => import("@/pages/admin/Orders"));
 const Customers = lazy(() => import("@/pages/admin/Customers"));
 const Products = lazy(() => import("@/pages/admin/Products"));
+const BulkOrders = lazy(() => import("@/pages/admin/BulkOrders"));
 const ContactInquiries = lazy(() => import("@/pages/admin/ContactInquiries"));
 const TestimonialAdmin = lazy(() => import("@/pages/admin/Testimonialadmin"));
 
@@ -39,6 +41,7 @@ import Footer from "@/components/Footer";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { CartProvider } from "@/context/CartContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import BulkBookings from "./pages/BulkBookings";
 
 function PageLoader() {
   return (
@@ -101,6 +104,14 @@ function AppRouter() {
             }
           />
           <Route
+            path="/admin/bulk-bookings"
+            element={
+              <ProtectedAdminRoute>
+                <BulkOrders />
+              </ProtectedAdminRoute>
+            }
+          />
+          <Route
             path="/admin/inquiries"
             element={
               <ProtectedAdminRoute>
@@ -140,6 +151,7 @@ function AppRouter() {
           <Route path="/shop" element={<Shop />} />
           <Route path="/about" element={<About />} />
           <Route path="/benefits" element={<Benefits />} />
+          <Route path="/bulk" element={<BulkBookings />} />
           <Route path="/contact" element={<Contact />} />
           <Route
             path="/checkout"

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { useAdminAuth } from '@/context/AdminAuthContext';
+import { useAdminAuth } from "@/context/AdminAuthContext";
 
 import {
   LayoutDashboard,
@@ -9,6 +9,7 @@ import {
   Users,
   Package,
   MessageSquare,
+  BriefcaseBusiness,
   LogOut,
   X,
   Star,
@@ -28,6 +29,12 @@ const NAV_ITEMS = [
     icon: ShoppingBag,
     label: "Orders",
     path: "/admin/orders",
+  },
+
+  {
+    icon: BriefcaseBusiness,
+    label: "Bulk Bookings",
+    path: "/admin/bulk-bookings",
   },
 
   {
@@ -217,12 +224,16 @@ const AdminLayout = ({ children }) => {
 
           {/* Right actions: profile / placeholders */}
           <div className="flex items-center gap-3">
-            <div className="hidden md:block text-2xl font-bold text-bree-text-primary">Admin Panel</div>
+            <div className="hidden md:block text-2xl font-bold text-bree-text-primary">
+              Admin Panel
+            </div>
           </div>
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+          {children}
+        </main>
       </div>
     </div>
   );
