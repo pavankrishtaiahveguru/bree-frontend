@@ -2,7 +2,6 @@ import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 
-import AdminLayout from "@/components/admin/AdminLayout";
 
 export default function BulkBookings() {
   const [loading, setLoading] = useState(false);
@@ -68,7 +67,7 @@ export default function BulkBookings() {
   };
 
   return (
-    <AdminLayout>
+    
       <section className="bg-white py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           {/* Hero */}
@@ -258,6 +257,5 @@ export default function BulkBookings() {
           </div>
         </div>
       </section>
-    </AdminLayout>
   );
 }
