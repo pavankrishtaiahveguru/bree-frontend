@@ -4,12 +4,10 @@ import { Link } from "react-router-dom";
 import {
   ShoppingBag,
   Users,
-  MessageSquare,
   Clock,
-  ArrowUpRight,
-  ArrowDownRight,
   Package,
   TrendingUp,
+  Briefcase,
 } from "lucide-react";
 import AdminLayout from "@/components/admin/AdminLayout";
 import axios from "axios";
@@ -149,6 +147,7 @@ const AdminDashboard = () => {
           total_revenue: 0,
           total_customers: 0,
           pending_orders: 0,
+          total_bulk_bookings: 0,
         });
         setRecentOrders([]);
       } finally {
@@ -180,6 +179,7 @@ const AdminDashboard = () => {
       note: stats?.total_orders ? "Real-time" : "Awaiting data",
       color: "bg-bree-primary",
     },
+
     {
       icon: TrendingUp,
       label: "Total Revenue",
@@ -188,6 +188,7 @@ const AdminDashboard = () => {
       note: stats?.total_revenue ? "Real-time" : "Awaiting data",
       color: "bg-violet-500",
     },
+
     {
       icon: Users,
       label: "Total Customers",
@@ -195,12 +196,23 @@ const AdminDashboard = () => {
       note: stats?.total_customers ? "Real-time" : "Awaiting data",
       color: "bg-sky-500",
     },
+
     {
       icon: Clock,
       label: "Pending Orders",
       value: stats?.pending_orders || 0,
       note: stats?.pending_orders ? "Real-time" : "Awaiting data",
       color: "bg-amber-500",
+    },
+
+    {
+      icon: Briefcase,
+      label: "Bulk Bookings",
+      value: stats?.total_bulk_bookings || 0,
+      note: stats?.total_bulk_bookings
+        ? "Corporate inquiries"
+        : "No inquiries yet",
+      color: "bg-indigo-500",
     },
   ];
 
@@ -221,7 +233,7 @@ const AdminDashboard = () => {
 
         {/* Stats */}
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-5">
             {[...Array(4)].map((_, i) => (
               <div
                 key={i}
