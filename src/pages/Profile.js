@@ -18,6 +18,7 @@ import {
   Loader2,
   LogOut,
   RefreshCw,
+  KeyRound,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -47,7 +48,8 @@ const TABS = [
 
 // ─── Profile Tab ─────────────────────────────────────────────────────────────
 function ProfileTab({ user }) {
-  const [editing, setEditing] = useState(false);
+  const [showProfileForm, setShowProfileForm] = useState(false);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [profileData, setProfileData] = useState(null);
@@ -71,7 +73,6 @@ function ProfileTab({ user }) {
           phone: res.data.phone || "",
         });
       } catch {
-        // Use auth context user as fallback
         if (user) {
           setProfileData(user);
           setForm({
@@ -90,7 +91,7 @@ function ProfileTab({ user }) {
     try {
       await axios.put(`${API}/profile`, form, { withCredentials: true });
       setProfileData((prev) => ({ ...prev, ...form }));
-      setEditing(false);
+      setShowProfileForm(false); // ✅ Fixed: was setEditing(false)
       toast.success("Profile updated!");
     } catch (err) {
       toast.error("Failed to update profile.");
@@ -129,6 +130,7 @@ function ProfileTab({ user }) {
         newPassword: "",
         confirmPassword: "",
       });
+      setShowPasswordForm(false);
       toast.success("Password updated successfully.");
     } catch (error) {
       toast.error(
@@ -149,6 +151,7 @@ function ProfileTab({ user }) {
 
   return (
     <div className="max-w-lg">
+      {/* Avatar + name */}
       <div className="flex items-center gap-4 mb-8">
         {profileData.picture ? (
           <img
@@ -157,8 +160,6 @@ function ProfileTab({ user }) {
             className="w-16 h-16 rounded-full object-cover"
             referrerPolicy="no-referrer"
             onError={(e) => {
-              console.log("Failed image:", profileData.picture);
-
               e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
                 profileData.name,
               )}&background=8BAA5B&color=fff`;
@@ -179,7 +180,8 @@ function ProfileTab({ user }) {
         </div>
       </div>
 
-      {editing ? (
+      {/* ── Profile edit form ── */}
+      {showProfileForm ? (
         <div className="space-y-4">
           <div>
             <Label>Name</Label>
@@ -225,13 +227,14 @@ function ProfileTab({ user }) {
               )}
               Save Changes
             </Button>
-            <Button variant="outline" onClick={() => setEditing(false)}>
+            <Button variant="outline" onClick={() => setShowProfileForm(false)}>
               <X className="w-4 h-4 mr-2" />
               Cancel
             </Button>
           </div>
         </div>
       ) : (
+        // ✅ Fixed: was `< className=` (broken JSX)
         <div className="space-y-4">
           {[
             { label: "Name", value: profileData.name },
@@ -250,91 +253,127 @@ function ProfileTab({ user }) {
               </span>
             </div>
           ))}
-          <Button
-            onClick={() => setEditing(true)}
-            variant="outline"
-            className="mt-2"
-          >
-            <Edit2 className="w-4 h-4 mr-2" />
-            Edit Profile
-          </Button>
 
-          <div className="mt-6 p-5 bg-white rounded-xl border border-bree-border">
-            <div className="flex items-center justify-between mb-4">
+          <div className="flex gap-4 mt-2">
+            <Button
+              onClick={() => {
+                setShowProfileForm(true);
+                setShowPasswordForm(false);
+              }}
+              variant="outline"
+              className="rounded-2xl"
+            >
+              <Edit2 className="w-4 h-4 mr-2" />
+              Edit Profile
+            </Button>
+
+            <Button
+              onClick={() => {
+                setShowPasswordForm((prev) => !prev);
+                setShowProfileForm(false);
+              }}
+              variant="outline"
+              className="rounded-2xl"
+            >
+              <KeyRound className="w-4 h-4 mr-2" />
+              Change Password
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Password form ── */}
+      {showPasswordForm && (
+        <div className="mt-6 p-5 bg-white rounded-xl border border-bree-border">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-outfit text-lg font-semibold text-bree-text-primary">
+                Security
+              </h3>
+              <p className="text-sm text-bree-text-secondary">
+                Change your account password below.
+              </p>
+            </div>
+          </div>
+
+          {profileData.provider !== "email" ? (
+            <div className="rounded-xl bg-bree-bg p-4 text-sm text-bree-text-secondary">
+              Password is managed by your Google account.
+            </div>
+          ) : (
+            <div className="space-y-4">
               <div>
-                <h3 className="font-outfit text-lg font-semibold text-bree-text-primary">
-                  Security
-                </h3>
-                <p className="text-sm text-bree-text-secondary">
-                  Change your account password below.
-                </p>
+                <Label>Current Password</Label>
+                <Input
+                  type="password"
+                  value={passwordForm.currentPassword}
+                  onChange={(e) =>
+                    setPasswordForm((prev) => ({
+                      ...prev,
+                      currentPassword: e.target.value,
+                    }))
+                  }
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label>New Password</Label>
+                <Input
+                  type="password"
+                  value={passwordForm.newPassword}
+                  onChange={(e) =>
+                    setPasswordForm((prev) => ({
+                      ...prev,
+                      newPassword: e.target.value,
+                    }))
+                  }
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label>Confirm Password</Label>
+                <Input
+                  type="password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(e) =>
+                    setPasswordForm((prev) => ({
+                      ...prev,
+                      confirmPassword: e.target.value,
+                    }))
+                  }
+                  className="mt-1"
+                />
+              </div>
+              <div className="flex items-center gap-3 pt-2">
+                <Button
+                  onClick={handlePasswordChange}
+                  disabled={passwordLoading}
+                  className="bg-bree-primary hover:bg-bree-primary-hover text-white"
+                >
+                  {passwordLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  ) : (
+                    <Save className="w-4 h-4 mr-2" />
+                  )}
+                  Change Password
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowPasswordForm(false);
+                    setPasswordForm({
+                      currentPassword: "",
+                      newPassword: "",
+                      confirmPassword: "",
+                    });
+                  }}
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Cancel
+                </Button>
               </div>
             </div>
-            {profileData.provider !== "email" ? (
-              <div className="rounded-xl bg-bree-bg p-4 text-sm text-bree-text-secondary">
-                Password is managed by your Google account.
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <Label>Current Password</Label>
-                  <Input
-                    type="password"
-                    value={passwordForm.currentPassword}
-                    onChange={(e) =>
-                      setPasswordForm((prev) => ({
-                        ...prev,
-                        currentPassword: e.target.value,
-                      }))
-                    }
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label>New Password</Label>
-                  <Input
-                    type="password"
-                    value={passwordForm.newPassword}
-                    onChange={(e) =>
-                      setPasswordForm((prev) => ({
-                        ...prev,
-                        newPassword: e.target.value,
-                      }))
-                    }
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label>Confirm Password</Label>
-                  <Input
-                    type="password"
-                    value={passwordForm.confirmPassword}
-                    onChange={(e) =>
-                      setPasswordForm((prev) => ({
-                        ...prev,
-                        confirmPassword: e.target.value,
-                      }))
-                    }
-                    className="mt-1"
-                  />
-                </div>
-                <div className="flex items-center gap-3 pt-2">
-                  <Button
-                    onClick={handlePasswordChange}
-                    disabled={passwordLoading}
-                    className="bg-bree-primary hover:bg-bree-primary-hover text-white"
-                  >
-                    {passwordLoading ? (
-                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                    ) : (
-                      <Save className="w-4 h-4 mr-2" />
-                    )}
-                    Change Password
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
+          )}
         </div>
       )}
     </div>
@@ -593,7 +632,6 @@ function OrdersTab() {
     fetch();
   }, []);
 
-  // update local orders when an order update arrives
   useOrdersSync((updated) => {
     setOrders((prev) =>
       prev.map((o) => (o.id === updated.id ? { ...o, ...updated } : o)),
@@ -658,7 +696,6 @@ function OrdersTab() {
                 );
               })()}
               <div className="flex items-center gap-2">
-                {/* Track Order */}
                 <button
                   type="button"
                   onClick={() => navigate(`/order/${order.id}/tracking`)}
@@ -666,13 +703,6 @@ function OrdersTab() {
                 >
                   Track Order
                 </button>
-                {/* View Order Details */}
-                {/* <button
-                  // onClick={() => navigate(`/order/${order.id}`)}
-                  className="text-sm border border-bree-border px-3 py-1 rounded-full hover:bg-bree-bg transition-all duration-200"
-                >
-                  View Details
-                </button> */}
               </div>
             </div>
           </div>
@@ -710,7 +740,7 @@ function OrdersTab() {
   );
 }
 
-// subscriptions tab
+// ─── Subscriptions Tab ────────────────────────────────────────────────────────
 function SubscriptionsTab() {
   const navigate = useNavigate();
 
@@ -720,11 +750,9 @@ function SubscriptionsTab() {
         <h2 className="text-2xl font-semibold text-bree-text-primary mb-3">
           My Subscriptions
         </h2>
-
         <p className="text-bree-text-secondary mb-6">
           View and manage all your active wellness subscriptions.
         </p>
-
         <Button
           onClick={() => navigate("/subscriptions")}
           className="bg-bree-primary hover:bg-bree-primary-hover text-white"
@@ -809,7 +837,7 @@ const Profile = () => {
           </motion.div>
 
           {/* Tabs */}
-          <div className="flex gap-1 bg-white p-1 rounded-2xl border border-bree-border mb-8 max-w-sm">
+          <div className="flex gap-1 bg-white p-1 rounded-2xl border border-bree-border mb-8 w-fit">
             {TABS.map((tab) => (
               <button
                 key={tab.id}
@@ -818,7 +846,7 @@ const Profile = () => {
                   nextParams.set("tab", tab.id);
                   setSearchParams(nextParams);
                 }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-sm font-medium transition-all ${
+                className={`flex items-center justify-center gap-3 py-2 px-8 rounded-2xl text-lg transition-all ${
                   activeTab === tab.id
                     ? "bg-bree-primary text-white shadow-sm"
                     : "text-bree-text-secondary hover:text-bree-text-primary"
