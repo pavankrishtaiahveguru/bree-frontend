@@ -8,6 +8,7 @@ import {
   Package,
   TrendingUp,
   Briefcase,
+  FileText,
 } from "lucide-react";
 import AdminLayout from "@/components/admin/AdminLayout";
 import axios from "axios";
@@ -129,19 +130,23 @@ const OrderRow = ({ order, delay }) => {
 
 const AdminDashboard = () => {
   const [stats, setStats] = useState(null);
+  const [bulkStats, setBulkStats] = useState(null);
   const [recentOrders, setRecentOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [statsRes, ordersRes] = await Promise.all([
+        const [statsRes, ordersRes, bulkStatsRes] = await Promise.all([
           axios.get(`${API}/dashboard`, { withCredentials: true }),
           axios.get(`${API}/orders?limit=5`, { withCredentials: true }),
+          axios.get(`${API}/bulk-bookings/stats`, { withCredentials: true }),
         ]);
         setStats(statsRes.data);
         setRecentOrders(ordersRes.data?.orders || []);
-      } catch {
+        setBulkStats(bulkStatsRes.data?.data);
+      } catch (error) {
+        console.error("❌ Error fetching dashboard data:", error);
         setStats({
           total_orders: 0,
           total_revenue: 0,
@@ -150,6 +155,7 @@ const AdminDashboard = () => {
           total_bulk_bookings: 0,
         });
         setRecentOrders([]);
+        setBulkStats(null);
       } finally {
         setLoading(false);
       }
@@ -160,14 +166,16 @@ const AdminDashboard = () => {
   // subscribe to order updates and refresh stats/recent orders
   useOrdersSync(async (order) => {
     try {
-      const [statsRes, ordersRes] = await Promise.all([
+      const [statsRes, ordersRes, bulkStatsRes] = await Promise.all([
         axios.get(`${API}/dashboard`, { withCredentials: true }),
         axios.get(`${API}/orders?limit=5`, { withCredentials: true }),
+        axios.get(`${API}/bulk-bookings/stats`, { withCredentials: true }),
       ]);
       setStats(statsRes.data);
       setRecentOrders(ordersRes.data?.orders || []);
+      setBulkStats(bulkStatsRes.data?.data);
     } catch (e) {
-      console.warn("Failed to refresh dashboard after order update", e);
+      console.warn("❌ Failed to refresh dashboard after order update", e);
     }
   });
 
@@ -208,11 +216,49 @@ const AdminDashboard = () => {
     {
       icon: Briefcase,
       label: "Bulk Bookings",
-      value: stats?.total_bulk_bookings || 0,
-      note: stats?.total_bulk_bookings
+      value: bulkStats?.totalBookings || 0,
+      note: bulkStats?.totalBookings
         ? "Corporate inquiries"
         : "No inquiries yet",
       color: "bg-indigo-500",
+    },
+  ];
+
+  const BULK_BOOKING_STAT_CARDS = [
+    {
+      icon: FileText,
+      label: "New Requests",
+      value: bulkStats?.newBookings || 0,
+      note: "Awaiting response",
+      color: "bg-blue-500",
+    },
+    {
+      icon: Clock,
+      label: "In Progress",
+      value: bulkStats?.inProgressBookings || 0,
+      note: "Being processed",
+      color: "bg-orange-500",
+    },
+    {
+      icon: FileText,
+      label: "Quoted",
+      value: bulkStats?.quotedBookings || 0,
+      note: "Awaiting confirmation",
+      color: "bg-purple-500",
+    },
+    {
+      icon: Package,
+      label: "Confirmed",
+      value: bulkStats?.confirmedBookings || 0,
+      note: "Ready for fulfillment",
+      color: "bg-green-500",
+    },
+    {
+      icon: Package,
+      label: "Completed",
+      value: bulkStats?.completedBookings || 0,
+      note: "Delivered",
+      color: "bg-emerald-500",
     },
   ];
 
@@ -231,10 +277,10 @@ const AdminDashboard = () => {
 
         {/* Quick Actions removed */}
 
-        {/* Stats */}
+        {/* Main Stats */}
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-5">
-            {[...Array(4)].map((_, i) => (
+            {[...Array(5)].map((_, i) => (
               <div
                 key={i}
                 className="bg-white rounded-2xl p-6 animate-pulse border border-bree-border"
@@ -246,18 +292,51 @@ const AdminDashboard = () => {
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-5">
             {STAT_CARDS.map((card, i) => (
               <StatCard key={card.label} {...card} delay={i * 0.1} />
             ))}
           </div>
         )}
 
+        {/* Bulk Bookings Section */}
+        {bulkStats && bulkStats.totalBookings > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="space-y-4"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-outfit text-xl font-semibold text-bree-text-primary">
+                  Bulk Bookings Workflow
+                </h2>
+                <p className="text-bree-text-secondary text-sm mt-1">
+                  CRM pipeline for corporate inquiries
+                </p>
+              </div>
+              <Link
+                to="/admin/bulk-orders"
+                className="text-sm text-bree-primary font-medium hover:underline"
+              >
+                View all
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              {BULK_BOOKING_STAT_CARDS.map((card, i) => (
+                <StatCard key={card.label} {...card} delay={0.4 + i * 0.05} />
+              ))}
+            </div>
+          </motion.div>
+        )}
+
         {/* Recent Orders */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
+          transition={{ delay: 0.5 }}
           className="bg-white rounded-2xl shadow-premium border border-bree-border overflow-hidden"
         >
           <div className="px-6 py-5 border-b border-bree-border flex items-center justify-between">
@@ -317,7 +396,7 @@ const AdminDashboard = () => {
                     <OrderRow
                       key={order.id || i}
                       order={order}
-                      delay={0.5 + i * 0.05}
+                      delay={0.6 + i * 0.05}
                     />
                   ))}
                 </tbody>

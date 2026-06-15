@@ -1,13 +1,17 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ShoppingBag, Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 
 const ProductCard = ({ product, index = 0 }) => {
+  const navigate = useNavigate();
   const { addToCart } = useCart();
+  const { user } = useAuth();
 
   const [isAdded, setIsAdded] = useState(false);
 
@@ -24,6 +28,11 @@ const ProductCard = ({ product, index = 0 }) => {
 
   const isOutOfStock = product.status === "Out Of Stock";
 
+  const isSubscriptionProduct =
+    Number(product.quantity) === 30 ||
+    product.name?.toLowerCase().includes("30-pack") ||
+    product.name?.toLowerCase().includes("monthly");
+
   const handleAddToCart = () => {
     if (isOutOfStock) return;
 
@@ -34,6 +43,28 @@ const ProductCard = ({ product, index = 0 }) => {
     toast.success(`${product.name} added to cart`);
 
     setTimeout(() => setIsAdded(false), 2000);
+  };
+
+  const handleSubscribe = () => {
+    const subscriptionPayload = {
+      product,
+      frequency: 30,
+      subscriptionPrice: price,
+    };
+
+    if (!user) {
+      navigate("/login", {
+        state: {
+          from: {
+            pathname: "/subscription-checkout",
+            state: subscriptionPayload,
+          },
+        },
+      });
+      return;
+    }
+
+    navigate("/subscription-checkout", { state: subscriptionPayload });
   };
 
   return (
@@ -161,33 +192,52 @@ const ProductCard = ({ product, index = 0 }) => {
         </div>
 
         {/* Add To Cart */}
-        <Button
-          type="button"
-          onClick={handleAddToCart}
-          data-testid={`add-to-cart-${product.id}`}
-          disabled={isOutOfStock}
-          className={`w-full mt-6 py-5 rounded-full text-base font-medium transition-all duration-300 ${
-            isOutOfStock
-              ? "bg-gray-400 cursor-not-allowed opacity-70 text-white"
-              : isAdded
-                ? "bg-bree-success text-white"
-                : "bg-bree-primary hover:bg-bree-primary-hover text-white"
-          }`}
-        >
-          {isOutOfStock ? (
-            <span>Out Of Stock</span>
-          ) : isAdded ? (
-            <span className="flex items-center justify-center gap-2">
-              <Check className="w-5 h-5" />
-              Added!
-            </span>
-          ) : (
-            <span className="flex items-center justify-center gap-2">
-              <ShoppingBag className="w-5 h-5" />
-              Add to Cart
-            </span>
-          )}
-        </Button>
+
+        {/* Product Actions */}
+        {isSubscriptionProduct ? (
+          <>
+            <Button
+              type="button"
+              onClick={handleSubscribe}
+              disabled={isOutOfStock}
+              className={`w-full mt-4 py-5 rounded-full text-base font-medium transition-all duration-300 ${
+                isOutOfStock
+                  ? "bg-gray-400 cursor-not-allowed opacity-70 text-white"
+                  : "bg-bree-primary hover:bg-bree-primary-hover text-white"
+              }`}
+            >
+              {isOutOfStock ? "Out Of Stock" : "Subscribe Now"}
+            </Button>
+          </>
+        ) : (
+          <Button
+            type="button"
+            onClick={handleAddToCart}
+            data-testid={`add-to-cart-${product.id}`}
+            disabled={isOutOfStock}
+            className={`w-full mt-6 py-5 rounded-full text-base font-medium transition-all duration-300 ${
+              isOutOfStock
+                ? "bg-gray-400 cursor-not-allowed opacity-70 text-white"
+                : isAdded
+                  ? "bg-bree-success text-white"
+                  : "bg-bree-primary hover:bg-bree-primary-hover text-white"
+            }`}
+          >
+            {isOutOfStock ? (
+              <span>Out Of Stock</span>
+            ) : isAdded ? (
+              <span className="flex items-center justify-center gap-2">
+                <Check className="w-5 h-5" />
+                Added!
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                <ShoppingBag className="w-5 h-5" />
+                Add to Cart
+              </span>
+            )}
+          </Button>
+        )}
       </div>
     </motion.div>
   );

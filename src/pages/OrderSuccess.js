@@ -28,12 +28,11 @@ const formatMoney = (value) => {
 
 const formatDate = (value) => {
   if (!value) return "—";
+
   return new Date(value).toLocaleString("en-IN", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+    timeZone: "Asia/Kolkata",
+    dateStyle: "medium",
+    timeStyle: "short",
   });
 };
 
@@ -334,8 +333,8 @@ const OrderSuccess = () => {
                         <span>{formatMoney(orderDetails.subtotal)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Shipping Charges</span>
-                        <span>{formatMoney(orderDetails.shipping)}</span>
+                        <span>Shipping</span>
+                        <span className="text-green-600 font-medium">Free</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Tax</span>

@@ -5,16 +5,16 @@ import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import CartDrawer from "./CartDrawer";
 
+// const LOGO_URL =
+  // "https://res.cloudinary.com/dxfs7qyzm/image/upload/v1779338649/Bree-logo_xgn0eh.png";
 const LOGO_URL =
-  "https://res.cloudinary.com/dxfs7qyzm/image/upload/v1779338649/Bree-logo_xgn0eh.png";
+  "/images/logo.png";
 
 const navLinks = [
   { name: "Home", path: "/" },
   { name: "Shop", path: "/shop" },
   { name: "Benefits", path: "/benefits" },
-  { name: "About", path: "/about" },
   { name: "Bulk", path: "/bulk" },
-  { name: "Contact", path: "/contact" },
 ];
 
 const Header = () => {
@@ -55,7 +55,7 @@ const Header = () => {
         <div className="max-w-7xl mx-auto px-6 md:px-12">
           <div className="flex items-center justify-between h-20">
             {/* Logo */}
-            <Link to="/" className="flex items-center" data-testid="logo-link">
+            <Link to="/" className="flex items-center" data-testid="logo-link cursor-pointer">
               <img
                 src={LOGO_URL}
                 alt="BREE"

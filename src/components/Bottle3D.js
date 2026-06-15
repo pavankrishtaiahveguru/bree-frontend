@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 
-const PRODUCT_IMAGE = "https://res.cloudinary.com/dxfs7qyzm/image/upload/v1778914390/Hero_Image_tanm0e.png";
+const PRODUCT_IMAGE = "/images/hero.png";
 
 const Bottle3D = ({ className = "" }) => {
   return (

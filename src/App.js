@@ -29,6 +29,21 @@ const Products = lazy(() => import("@/pages/admin/Products"));
 const BulkOrders = lazy(() => import("@/pages/admin/BulkOrders"));
 const ContactInquiries = lazy(() => import("@/pages/admin/ContactInquiries"));
 const TestimonialAdmin = lazy(() => import("@/pages/admin/Testimonialadmin"));
+const AdminSubscriptions = lazy(
+  () => import("@/pages/admin/AdminSubscriptions"),
+);
+const AdminSubscriptionDetails = lazy(
+  () => import("@/pages/admin/AdminSubscriptionDetails"),
+);
+const SubscriptionAnalytics = lazy(
+  () => import("@/pages/admin/SubscriptionAnalytics"),
+);
+
+const SubscriptionCheckout = lazy(() => import("@/pages/SubscriptionCheckout"));
+
+const SubscriptionSuccess = lazy(() => import("@/pages/SubscriptionSuccess"));
+const MySubscriptions = lazy(() => import("@/pages/MySubscriptions"));
+const SubscriptionDetails = lazy(() => import("@/pages/SubscriptionDetails"));
 
 // Admin Guard — NOT lazy (tiny, always needed for route protection)
 // FIX: ProtectedAdminRoute should NOT be lazy — it causes a flash/delay on protected routes
@@ -84,6 +99,30 @@ function AppRouter() {
             element={
               <ProtectedAdminRoute>
                 <Orders />
+              </ProtectedAdminRoute>
+            }
+          />
+          <Route
+            path="/admin/subscriptions"
+            element={
+              <ProtectedAdminRoute>
+                <AdminSubscriptions />
+              </ProtectedAdminRoute>
+            }
+          />
+          <Route
+            path="/admin/subscriptions/:id"
+            element={
+              <ProtectedAdminRoute>
+                <AdminSubscriptionDetails />
+              </ProtectedAdminRoute>
+            }
+          />
+          <Route
+            path="/admin/subscription-analytics"
+            element={
+              <ProtectedAdminRoute>
+                <SubscriptionAnalytics />
               </ProtectedAdminRoute>
             }
           />
@@ -163,6 +202,40 @@ function AppRouter() {
           />
           <Route path="/checkout/success" element={<CheckoutSuccess />} />
           <Route path="/order-success" element={<OrderSuccess />} />
+          <Route
+            path="/subscription-checkout"
+            element={
+              <ProtectedRoute>
+                <SubscriptionCheckout />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/subscription-success"
+            element={
+              <ProtectedRoute>
+                <SubscriptionSuccess />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/subscriptions"
+            element={
+              <ProtectedRoute>
+                <MySubscriptions />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/subscriptions/:id"
+            element={
+              <ProtectedRoute>
+                <SubscriptionDetails />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route

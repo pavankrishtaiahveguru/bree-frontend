@@ -17,6 +17,7 @@ import {
   CheckCircle,
   Loader2,
   LogOut,
+  RefreshCw,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,7 @@ const TABS = [
   { id: "profile", label: "Profile", icon: User },
   { id: "addresses", label: "Addresses", icon: MapPin },
   { id: "orders", label: "Orders", icon: Package },
+  { id: "subscriptions", label: "Subscriptions", icon: RefreshCw },
 ];
 
 // ─── Profile Tab ─────────────────────────────────────────────────────────────
@@ -578,7 +580,10 @@ function OrdersTab() {
     const fetch = async () => {
       try {
         const res = await axios.get(`${API}/orders`, { withCredentials: true });
-        setOrders(res.data);
+        const ordersData = Array.isArray(res.data)
+          ? res.data
+          : res.data?.orders || [];
+        setOrders(ordersData);
       } catch {
         toast.error("Could not load orders.");
       } finally {
@@ -655,6 +660,7 @@ function OrdersTab() {
               <div className="flex items-center gap-2">
                 {/* Track Order */}
                 <button
+                  type="button"
                   onClick={() => navigate(`/order/${order.id}/tracking`)}
                   className="text-sm bg-bree-primary text-white px-3 py-1 rounded-full"
                 >
@@ -700,6 +706,32 @@ function OrdersTab() {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+// subscriptions tab
+function SubscriptionsTab() {
+  const navigate = useNavigate();
+
+  return (
+    <div className="max-w-2xl">
+      <div className="bg-white border border-bree-border rounded-3xl p-8">
+        <h2 className="text-2xl font-semibold text-bree-text-primary mb-3">
+          My Subscriptions
+        </h2>
+
+        <p className="text-bree-text-secondary mb-6">
+          View and manage all your active wellness subscriptions.
+        </p>
+
+        <Button
+          onClick={() => navigate("/subscriptions")}
+          className="bg-bree-primary hover:bg-bree-primary-hover text-white"
+        >
+          View Subscriptions
+        </Button>
+      </div>
     </div>
   );
 }
@@ -810,6 +842,7 @@ const Profile = () => {
               {activeTab === "profile" && <ProfileTab user={user} />}
               {activeTab === "addresses" && <AddressesTab />}
               {activeTab === "orders" && <OrdersTab />}
+              {activeTab === "subscriptions" && <SubscriptionsTab />}
             </motion.div>
           </AnimatePresence>
         </div>

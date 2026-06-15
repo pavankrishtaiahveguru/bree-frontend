@@ -10,6 +10,8 @@ import {
   Package,
   MessageSquare,
   BriefcaseBusiness,
+  Repeat,
+  BarChart3,
   LogOut,
   X,
   Star,
@@ -47,6 +49,18 @@ const NAV_ITEMS = [
     icon: Package,
     label: "Products",
     path: "/admin/products",
+  },
+
+  {
+    icon: Repeat,
+    label: "Subscriptions",
+    path: "/admin/subscriptions",
+  },
+
+  {
+    icon: BarChart3,
+    label: "Analytics",
+    path: "/admin/subscription-analytics",
   },
 
   {

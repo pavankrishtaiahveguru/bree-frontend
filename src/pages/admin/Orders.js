@@ -281,7 +281,11 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
               Order #{order.id}
             </h3>
             <p className="text-bree-text-secondary text-xs mt-0.5">
-              {new Date(order.created_at).toLocaleString("en-IN")}
+              {new Date(order.created_at).toLocaleString("en-IN", {
+                timeZone: "Asia/Kolkata",
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
             </p>
           </div>
           <button
@@ -345,7 +349,10 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
               Shipping Address
             </p>
             <p className="text-sm text-bree-text-primary bg-bree-bg rounded-xl p-3">
-              {order.shipping_address}
+              {order.shipping_address ||
+                order.address_snapshot ||
+                order.shippingAddress ||
+                "Not available"}
             </p>
           </div>
 
@@ -1032,7 +1039,11 @@ const Orders = () => {
                         />
                       </td>
                       <td className="py-3 px-4 text-xs text-bree-text-secondary whitespace-nowrap">
-                        {new Date(order.created_at).toLocaleDateString("en-IN")}
+                        {new Date(order.created_at).toLocaleString("en-IN", {
+                          timeZone: "Asia/Kolkata",
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
                       </td>
                       <td className="py-3 px-4">
                         <Button
