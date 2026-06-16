@@ -47,7 +47,7 @@ const LOADING_PHASE = {
 
 const Checkout = () => {
   const navigate = useNavigate();
-  const { cartItems, cartTotal, clearCart, syncCart } = useCart();
+  const { cartItems, cartTotal, syncCart } = useCart();
 
   // ── State ─────────────────────────────────────────────────────────────────
   const [isInitialising, setIsInitialising] = useState(true);
@@ -119,7 +119,7 @@ const Checkout = () => {
       return;
     }
     initialise();
-  }, [cartItems.length, navigate, initialise]);
+  }, [cartItems.length, loadingPhase, navigate, initialise]);
 
   // ── Main payment handler ──────────────────────────────────────────────────
   const handleProceedToPayment = async () => {
@@ -209,7 +209,7 @@ const Checkout = () => {
       const lineItemsTotal = buildLineItemsTotal(lineItems);
 
       const apiBaseUrl =
-        import.meta.env.VITE_API_URL || "http://localhost:4000";
+        process.env.REACT_APP_BACKEND_URL || "http://localhost:4000";
 
       const checkoutOptions = {
         // Razorpay core fields

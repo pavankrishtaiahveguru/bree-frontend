@@ -65,7 +65,7 @@ const OrderTracking = () => {
     } finally {
       setLoading(false);
     }
-  }, [id, navigate]);
+  }, [id]);
 
   useEffect(() => {
     fetch();

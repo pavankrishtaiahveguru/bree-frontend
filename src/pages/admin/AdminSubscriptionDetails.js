@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Pause, Play, Trash, ArrowLeft, Eye } from "lucide-react";
@@ -142,22 +142,24 @@ const AdminSubscriptionDetails = () => {
   const [confirm, setConfirm] = useState({ open: false, action: null });
   const [cancelReason, setCancelReason] = useState("");
 
-  const loadDetails = async () => {
+  const loadDetails = useCallback(async () => {
     setLoading(true);
+
     try {
       const payload = await fetchAdminSubscriptionDetails(id);
       setData(payload);
+      setError(null);
     } catch (err) {
       console.error(err);
       setError("Unable to load subscription details.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     loadDetails();
-  }, [id]);
+  }, [loadDetails]);
 
   const handleAction = async (action) => {
     if (action === "cancel" && !cancelReason.trim()) {
