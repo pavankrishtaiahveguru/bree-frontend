@@ -238,17 +238,14 @@ const ContactInquiries = () => {
   const handleToggleContacted = async (id) => {
     try {
       const currentInquiry = inquiries.find((i) => i.id === id);
-
       if (!currentInquiry) return;
 
       const updatedStatus = !currentInquiry.contacted;
 
       // Save in database
       await axios.patch(
-        `${API}/inquiries/${id}`,
-        {
-          contacted: updatedStatus,
-        },
+        `${API}/inquiries/${id}/contacted`,
+        { contacted: updatedStatus },
         AUTH(),
       );
 

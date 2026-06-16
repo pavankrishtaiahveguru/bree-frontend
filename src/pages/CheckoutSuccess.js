@@ -28,23 +28,25 @@ const CheckoutSuccess = () => {
   useEffect(() => {
     const fetchOrder = async () => {
       if (!orderId) {
-        console.log("No orderId found");
+        // console.log("No orderId found");
         setStatus("error");
         return;
       }
 
       try {
-        console.log("CheckoutSuccess orderId:", orderId);
+        // console.log("CheckoutSuccess orderId:", orderId);
 
         const response = await axios.get(`/api/orders/${orderId}`);
 
-        console.log("Order API response:", response.data);
+        // console.log("Order API response:", response.data);
 
         setOrderDetails(response.data);
         clearCart();
         setStatus("success");
       } catch (error) {
-        console.error("[CheckoutSuccess] Failed to load order:", error);
+        if (process.env.NODE_ENV === "development") {
+          console.error("[CheckoutSuccess] Failed to load order:", error);
+        }
         setStatus("error");
       }
     };
@@ -169,7 +171,7 @@ const CheckoutSuccess = () => {
                 <h3 className="font-bold mb-5">Products</h3>
                 <div className="space-y-4">
                   {orderDetails?.items?.map((item) => {
-                    console.log("ITEM:", item);
+                    // console.log("ITEM:", item);
 
                     return (
                       <div
@@ -203,7 +205,13 @@ const CheckoutSuccess = () => {
 
               {/* Action buttons */}
               <div className="mt-10 grid md:grid-cols-3 gap-4">
-                <Link to="/orders">
+                <Link
+                  to={
+                    orderId
+                      ? `/order/${orderId}/tracking`
+                      : "/profile?tab=orders"
+                  }
+                >
                   <Button className="w-full bg-bree-primary">
                     <Truck className="w-4 h-4 mr-2" />
                     Track Order
@@ -231,7 +239,7 @@ const CheckoutSuccess = () => {
               <p className="mt-3 text-bree-text-secondary">
                 Unable to load order details.
               </p>
-              <Link to="/orders" className="mt-6 inline-block">
+              <Link to="/profile?tab=orders" className="mt-6 inline-block">
                 <Button className="bg-bree-primary">View My Orders</Button>
               </Link>
             </div>

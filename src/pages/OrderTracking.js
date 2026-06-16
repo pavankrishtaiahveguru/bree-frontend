@@ -36,8 +36,8 @@ const OrderTracking = () => {
         withCredentials: true,
       });
 
-      console.log("API RESPONSE", res.data);
-      console.log("ORDER ITEMS", res.data.order?.items);
+      // console.log("API RESPONSE", res.data);
+      // console.log("ORDER ITEMS", res.data.order?.items);
 
       if (res.data?.order) {
         setOrder(res.data.order);
@@ -48,9 +48,9 @@ const OrderTracking = () => {
           (res.data.orderItems?.length ? res.data.orderItems : null) ||
           [];
         setItems(resolvedItems);
-        console.log("Order", res.data.order);
-        console.log("Items", resolvedItems);
-        console.log("Shipping", res.data.order.shipping_address);
+        // console.log("Order", res.data.order);
+        // console.log("Items", resolvedItems);
+        // console.log("Shipping", res.data.order.shipping_address);
         setError("");
       } else {
         setError("Order not found. Please verify the order ID and try again.");
@@ -96,11 +96,11 @@ const OrderTracking = () => {
     );
 
     if (!hasPending && order?.created_at) {
-      console.log(
-        "[DEBUG Timeline]",
-        "Injecting pending status with created_at:",
-        order.created_at,
-      );
+      // console.log(
+      //   "[DEBUG Timeline]",
+      //   "Injecting pending status with created_at:",
+      //   order.created_at,
+      // );
       return [
         {
           id: `pending-${order.id}`,
@@ -115,10 +115,10 @@ const OrderTracking = () => {
       ];
     }
 
-    console.log(
-      "[DEBUG Timeline]",
-      "Pending already in history or no order.created_at",
-    );
+    // console.log(
+    //   "[DEBUG Timeline]",
+    //   "Pending already in history or no order.created_at",
+    // );
     return historySteps;
   }, [tracking, order]);
 

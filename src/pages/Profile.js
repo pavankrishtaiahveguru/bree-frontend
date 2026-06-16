@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Helmet } from "react-helmet-async";
 import { toast } from "sonner";
-import axios from "axios";
+import axios from "@/lib/api";
 import useOrdersSync from "@/hooks/useOrdersSync";
 import {
   User,
@@ -24,8 +24,6 @@ import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
-const API = `${process.env.REACT_APP_BACKEND_URL || "http://localhost:4000"}/api`;
 
 const normalizeStatus = (status) => {
   if (!status) return "pending";
@@ -63,9 +61,7 @@ function ProfileTab({ user }) {
   useEffect(() => {
     const fetch = async () => {
       try {
-        const res = await axios.get(`${API}/profile`, {
-          withCredentials: true,
-        });
+        const res = await axios.get(`/api/profile`);
         setProfileData(res.data);
         setForm({
           name: res.data.name || "",
@@ -89,9 +85,9 @@ function ProfileTab({ user }) {
   const handleSave = async () => {
     setLoading(true);
     try {
-      await axios.put(`${API}/profile`, form, { withCredentials: true });
+      await axios.put(`/api/profile`, form);
       setProfileData((prev) => ({ ...prev, ...form }));
-      setShowProfileForm(false); // ✅ Fixed: was setEditing(false)
+      setShowProfileForm(false);
       toast.success("Profile updated!");
     } catch (err) {
       toast.error("Failed to update profile.");
@@ -116,15 +112,11 @@ function ProfileTab({ user }) {
 
     setPasswordLoading(true);
     try {
-      await axios.patch(
-        `${API}/auth/change-password`,
-        {
-          currentPassword: passwordForm.currentPassword,
-          newPassword: passwordForm.newPassword,
-          confirmPassword: passwordForm.confirmPassword,
-        },
-        { withCredentials: true },
-      );
+      await axios.put(`/api/profile/password`, {
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+        confirmPassword: passwordForm.confirmPassword,
+      });
       setPasswordForm({
         currentPassword: "",
         newPassword: "",
@@ -234,7 +226,6 @@ function ProfileTab({ user }) {
           </div>
         </div>
       ) : (
-        // ✅ Fixed: was `< className=` (broken JSX)
         <div className="space-y-4">
           {[
             { label: "Name", value: profileData.name },
@@ -398,9 +389,7 @@ function AddressesTab() {
 
   const fetchAddresses = useCallback(async () => {
     try {
-      const res = await axios.get(`${API}/addresses`, {
-        withCredentials: true,
-      });
+      const res = await axios.get(`/api/addresses`);
       setAddresses(res.data);
     } catch {
       toast.error("Could not load addresses.");
@@ -430,12 +419,10 @@ function AddressesTab() {
   const handleSubmit = async () => {
     try {
       if (editingId) {
-        await axios.put(`${API}/addresses/${editingId}`, form, {
-          withCredentials: true,
-        });
+        await axios.put(`/api/addresses/${editingId}`, form);
         toast.success("Address updated!");
       } else {
-        await axios.post(`${API}/addresses`, form, { withCredentials: true });
+        await axios.post(`/api/addresses`, form);
         toast.success("Address added!");
       }
       fetchAddresses();
@@ -447,7 +434,7 @@ function AddressesTab() {
 
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`${API}/addresses/${id}`, { withCredentials: true });
+      await axios.delete(`/api/addresses/${id}`);
       toast.success("Address removed.");
       fetchAddresses();
     } catch {
@@ -457,11 +444,7 @@ function AddressesTab() {
 
   const handleSetDefault = async (id) => {
     try {
-      await axios.put(
-        `${API}/addresses/${id}/default`,
-        {},
-        { withCredentials: true },
-      );
+      await axios.put(`/api/addresses/${id}/default`, {});
       toast.success("Default address updated.");
       fetchAddresses();
     } catch {
@@ -618,7 +601,7 @@ function OrdersTab() {
   useEffect(() => {
     const fetch = async () => {
       try {
-        const res = await axios.get(`${API}/orders`, { withCredentials: true });
+        const res = await axios.get(`/api/orders`);
         const ordersData = Array.isArray(res.data)
           ? res.data
           : res.data?.orders || [];
