@@ -3,6 +3,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Upload, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+// DESIGN DECISION: This file uses snake_case "is_subscription" everywhere
+// (EMPTY_FORM key, checkbox binding, payload) so it matches the DB column
+// name exactly and no camelCase ↔ snake_case conversion is ever needed.
+
 const EMPTY_FORM = {
   name: "",
   category: "",
@@ -13,6 +17,7 @@ const EMPTY_FORM = {
   quantity: "",
   stockQty: "",
   features: "",
+  is_subscription: false, // snake_case — matches DB column and payload key
   popular: false,
   status: "In Stock",
   displayOrder: "",
@@ -20,7 +25,6 @@ const EMPTY_FORM = {
 
 const validate = (form, imageFile, isEdit) => {
   const errors = {};
-
   if (!form.name.trim()) errors.name = "Product name is required";
   if (!form.category.trim()) errors.category = "Category is required";
   if (!form.mrp) errors.mrp = "MRP is required";
@@ -30,7 +34,6 @@ const validate = (form, imageFile, isEdit) => {
   if (!isEdit && !form.image && !imageFile) {
     errors.image = "Product image is required";
   }
-
   return errors;
 };
 
@@ -47,9 +50,29 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
   useEffect(() => {
     if (open) {
       if (initial) {
+        // BUG FIX 1 — Previous code had two problems:
+        // (a) A syntax error: dangling || before a commented-out line meant
+        //     the file couldn't even parse in strict mode.
+        // (b) The mapped value was assigned to camelCase "isSubscription"
+        //     but then set on the form as "isSubscription" while EMPTY_FORM
+        //     and the checkbox both used "is_subscription". The mapped value
+        //     was orphaned, and ...initial spread overwrote is_subscription
+        //     with the raw DB integer (0 or 1) which !== true, so the
+        //     checkbox always appeared unchecked after opening edit.
+        //
+        // Fix: normalise to a real boolean, then assign to "is_subscription"
+        // (same key as everywhere else) AFTER the ...initial spread.
+        const is_subscription_bool =
+          initial.is_subscription === 1 ||
+          initial.is_subscription === true ||
+          initial.isSubscription === 1 ||
+          initial.isSubscription === true;
+
         setForm({
           ...EMPTY_FORM,
           ...initial,
+          // Written after ...initial so the raw DB integer can't win.
+          is_subscription: is_subscription_bool,
           stockQty: initial.stock_qty ?? initial.stockQty ?? "",
           displayOrder: initial.display_order ?? initial.displayOrder ?? "",
           features: Array.isArray(initial.features)
@@ -72,10 +95,7 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
   }, [open, initial]);
 
   const set = (key, value) => {
-    setForm((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
+    setForm((prev) => ({ ...prev, [key]: value }));
   };
 
   const handleFile = (e) => {
@@ -112,7 +132,7 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
 
     setIsSubmitting(true);
     try {
-      await onSave({
+      const payload = {
         ...form,
         price: Number(form.price),
         mrp: Number(form.mrp),
@@ -122,7 +142,18 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
         displayOrder:
           form.displayOrder !== "" ? Number(form.displayOrder) : undefined,
         imageFile,
-      });
+        is_subscription: form.is_subscription, // boolean true/false
+      };
+
+      // DEBUG — remove after confirming is_subscription saves correctly ***
+      // console.log("================================");
+      // console.log("PRODUCT PAYLOAD");
+      // console.log(payload);
+      // console.log("isSubscription:", payload.isSubscription);
+      // console.log("is_subscription:", payload.is_subscription);
+      // console.log("================================");
+
+      await onSave(payload);
       onClose();
     } finally {
       setIsSubmitting(false);
@@ -135,48 +166,31 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
         <>
           {/* Backdrop */}
           <motion.div
-            initial={{
-              opacity: 0,
-            }}
-            animate={{
-              opacity: 1,
-            }}
-            exit={{
-              opacity: 0,
-            }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             onClick={onClose}
             className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50"
           />
 
           {/* Modal */}
           <motion.div
-            initial={{
-              opacity: 0,
-              scale: 0.96,
-            }}
-            animate={{
-              opacity: 1,
-              scale: 1,
-            }}
-            exit={{
-              opacity: 0,
-              scale: 0.96,
-            }}
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.96 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
           >
-            <div className=" bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto border border-bree-border custom-scrollbar ">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto border border-bree-border custom-scrollbar">
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-5 border-b border-bree-border">
                 <div>
                   <h2 className="text-xl font-semibold text-bree-text-primary">
                     {isEdit ? "Edit Product" : "Add New Product"}
                   </h2>
-
                   <p className="text-sm text-bree-text-secondary mt-1">
                     Fill product information
                   </p>
                 </div>
-
                 <button
                   onClick={onClose}
                   className="w-10 h-10 rounded-full hover:bg-bree-bg flex items-center justify-center"
@@ -192,7 +206,6 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
                   <label className="block text-sm font-medium mb-2 text-bree-text-primary">
                     Product Image
                   </label>
-
                   <div
                     onClick={() => fileRef.current.click()}
                     className="border-2 border-dashed border-bree-border rounded-2xl p-5 flex items-center gap-4 cursor-pointer hover:border-bree-primary transition"
@@ -208,17 +221,14 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
                         <Upload className="w-8 h-8 text-bree-primary" />
                       )}
                     </div>
-
                     <div>
                       <p className="font-medium text-bree-text-primary">
                         Upload Product Image
                       </p>
-
                       <p className="text-sm text-bree-text-secondary mt-1">
                         PNG, JPG supported
                       </p>
                     </div>
-
                     <input
                       ref={fileRef}
                       type="file"
@@ -235,11 +245,11 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
                   )}
                 </div>
 
+                {/* Product Name */}
                 <div>
                   <label className="block text-sm font-medium mb-2 text-bree-text-primary">
                     Product Name
                   </label>
-
                   <input
                     type="text"
                     value={form.name}
@@ -247,11 +257,9 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
                     placeholder="Enter product name"
                     className="w-full h-12 px-4 rounded-2xl border border-bree-border outline-none focus:border-bree-primary"
                   />
-
                   {errors.name && (
                     <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
                       <AlertCircle className="w-3 h-3" />
-
                       {errors.name}
                     </p>
                   )}
@@ -262,7 +270,6 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
                   <label className="block text-sm font-medium mb-2 text-bree-text-primary">
                     Product Category
                   </label>
-
                   <input
                     type="text"
                     value={form.category}
@@ -278,7 +285,6 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
                     <label className="block text-sm font-medium mb-2 text-bree-text-primary">
                       MRP Price
                     </label>
-
                     <input
                       type="number"
                       value={form.mrp}
@@ -287,12 +293,10 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
                       className="w-full h-12 px-4 rounded-2xl border border-bree-border outline-none focus:border-bree-primary"
                     />
                   </div>
-
                   <div>
                     <label className="block text-sm font-medium mb-2 text-bree-text-primary">
                       Selling Price
                     </label>
-
                     <input
                       type="number"
                       value={form.price}
@@ -308,7 +312,6 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
                   <label className="block text-sm font-medium mb-2 text-bree-text-primary">
                     Quantity (Days)
                   </label>
-
                   <input
                     type="number"
                     value={form.quantity}
@@ -323,7 +326,6 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
                   <label className="block text-sm font-medium mb-2 text-bree-text-primary">
                     Stock quantity
                   </label>
-
                   <input
                     type="number"
                     value={form.stockQty}
@@ -341,7 +343,6 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
                       (1 = first on shop page)
                     </span>
                   </label>
-
                   <input
                     type="number"
                     min="1"
@@ -361,7 +362,6 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
                   <label className="block text-sm font-medium mb-2 text-bree-text-primary">
                     Availability
                   </label>
-
                   <select
                     value={form.status}
                     onChange={(e) => set("status", e.target.value)}
@@ -377,7 +377,6 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
                   <label className="block text-sm font-medium mb-2 text-bree-text-primary">
                     Description
                   </label>
-
                   <textarea
                     rows={4}
                     value={form.description}
@@ -392,7 +391,6 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
                   <label className="block text-sm font-medium mb-2 text-bree-text-primary">
                     Features
                   </label>
-
                   <textarea
                     rows={3}
                     value={form.features}
@@ -402,18 +400,39 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
                   />
                 </div>
 
+                {/* Subscription */}
+                <div className="flex items-center justify-between border border-bree-border rounded-2xl px-4 py-3">
+                  <div>
+                    <p className="font-medium text-bree-text-primary">
+                      Subscription Product
+                    </p>
+                    <p className="text-sm text-bree-text-secondary">
+                      Enable monthly recurring subscription
+                    </p>
+                  </div>
+                  {/* BUG FIX 1: Both checked and onChange use "is_subscription"
+                      (snake_case) matching EMPTY_FORM and the payload key.
+                      Previously "isSubscription" (camel) was used in useEffect
+                      but "is_subscription" everywhere else — a key mismatch
+                      that left the checkbox permanently unchecked on edit. */}
+                  <input
+                    type="checkbox"
+                    checked={form.is_subscription}
+                    onChange={(e) => set("is_subscription", e.target.checked)}
+                    className="w-5 h-5 accent-bree-primary"
+                  />
+                </div>
+
                 {/* Popular */}
                 <div className="flex items-center justify-between border border-bree-border rounded-2xl px-4 py-3">
                   <div>
                     <p className="font-medium text-bree-text-primary">
                       Most Popular Product
                     </p>
-
                     <p className="text-sm text-bree-text-secondary">
                       Highlight this product
                     </p>
                   </div>
-
                   <input
                     type="checkbox"
                     checked={form.popular}
@@ -433,7 +452,6 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
                 >
                   Cancel
                 </Button>
-
                 <Button
                   onClick={handleSubmit}
                   className="rounded-full bg-bree-primary hover:bg-bree-primary-hover text-white px-6"

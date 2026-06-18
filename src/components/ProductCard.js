@@ -28,10 +28,12 @@ const ProductCard = ({ product, index = 0 }) => {
 
   const isOutOfStock = product.status === "Out Of Stock";
 
+  // Subscription status is determined solely by the database field.
+  // Supports both snake_case (is_subscription) and camelCase (is_subscription)
+  // response shapes, and accepts both boolean true and integer 1.
   const isSubscriptionProduct =
-    Number(product.quantity) === 30 ||
-    product.name?.toLowerCase().includes("30-pack") ||
-    product.name?.toLowerCase().includes("monthly");
+    product.is_subscription === 1 ||
+    product.is_subscription === true;
 
   const handleAddToCart = () => {
     if (isOutOfStock) return;
@@ -191,24 +193,20 @@ const ProductCard = ({ product, index = 0 }) => {
           )}
         </div>
 
-        {/* Add To Cart */}
-
         {/* Product Actions */}
         {isSubscriptionProduct ? (
-          <>
-            <Button
-              type="button"
-              onClick={handleSubscribe}
-              disabled={isOutOfStock}
-              className={`w-full mt-4 py-5 rounded-full text-base font-medium transition-all duration-300 ${
-                isOutOfStock
-                  ? "bg-gray-400 cursor-not-allowed opacity-70 text-white"
-                  : "bg-bree-primary hover:bg-bree-primary-hover text-white"
-              }`}
-            >
-              {isOutOfStock ? "Out Of Stock" : "Subscribe Now"}
-            </Button>
-          </>
+          <Button
+            type="button"
+            onClick={handleSubscribe}
+            disabled={isOutOfStock}
+            className={`w-full mt-4 py-5 rounded-full text-base font-medium transition-all duration-300 ${
+              isOutOfStock
+                ? "bg-gray-400 cursor-not-allowed opacity-70 text-white"
+                : "bg-bree-primary hover:bg-bree-primary-hover text-white"
+            }`}
+          >
+            {isOutOfStock ? "Out Of Stock" : "Subscribe Now"}
+          </Button>
         ) : (
           <Button
             type="button"
