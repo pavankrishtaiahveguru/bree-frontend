@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Pause, Play, Trash, ArrowLeft, Eye } from "lucide-react";
+import { Pause, Play, Trash, ArrowLeft } from "lucide-react";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -11,6 +11,116 @@ import {
   resumeAdminSubscription,
   cancelAdminSubscription,
 } from "@/services/adminSubscriptionService";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// getDisplayStatus
+// ─────────────────────────────────────────────────────────────────────────────
+// Razorpay keeps subscription_status = "active" until the current billing
+// cycle ends, even after the customer or admin has requested cancellation.
+// Our backend sets order_status = "cancelled" immediately when a cancel is
+// triggered (via cancelSubscription with cancel_at_cycle_end = 1), so we
+// cross-check both fields to derive the true display state.
+//
+// Rules (in priority order):
+//   1. subscription_status = "active"  AND order_status = "cancelled"
+//      → "cancellation_requested"  (still running, won't renew)
+//   2. everything else → pass subscription_status through unchanged
+// ─────────────────────────────────────────────────────────────────────────────
+const getDisplayStatus = (subscriptionStatus, orderStatus) => {
+  const sub = (subscriptionStatus || "").toLowerCase();
+  const ord = (orderStatus || "").toLowerCase();
+
+  if (sub === "active" && ord === "cancelled") {
+    return "cancellation_requested";
+  }
+
+  return sub || "pending";
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Status badge config
+// ─────────────────────────────────────────────────────────────────────────────
+const STATUS_CONFIG = {
+  active: {
+    classes: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    label: "Active",
+  },
+  paused: {
+    classes: "bg-amber-100 text-amber-700 border-amber-200",
+    label: "Paused",
+  },
+  cancelled: {
+    classes: "bg-rose-100 text-rose-700 border-rose-200",
+    label: "Cancelled",
+  },
+  past_due: {
+    classes: "bg-red-100 text-red-700 border-red-200",
+    label: "Payment Failed",
+  },
+  expired: {
+    classes: "bg-slate-100 text-slate-700 border-slate-200",
+    label: "Expired",
+  },
+  pending: {
+    classes: "bg-sky-100 text-sky-700 border-sky-200",
+    label: "Pending",
+  },
+  // Razorpay keeps subscription_status = "active" until cycle end after a
+  // cancel_at_cycle_end=1 cancellation; we surface it as its own state so
+  // admins are never misled into thinking the subscription will auto-renew.
+  cancellation_requested: {
+    classes: "bg-red-100 text-red-700 border-red-200",
+    label: "Cancellation Requested",
+  },
+};
+
+const StatusBadge = ({ status }) => {
+  const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
+  return (
+    <span
+      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border ${config.classes}`}
+    >
+      {config.label}
+    </span>
+  );
+};
+
+// Payment status badge — separate from subscription status so colours and
+// labels match payment semantics rather than subscription lifecycle semantics.
+const PAYMENT_STATUS_CONFIG = {
+  paid: {
+    classes: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    label: "Paid",
+  },
+  captured: {
+    classes: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    label: "Paid",
+  },
+  pending: {
+    classes: "bg-amber-100  text-amber-700  border-amber-200",
+    label: "Pending",
+  },
+  created: {
+    classes: "bg-amber-100  text-amber-700  border-amber-200",
+    label: "Pending",
+  },
+  failed: {
+    classes: "bg-red-100    text-red-700    border-red-200",
+    label: "Failed",
+  },
+};
+
+const PaymentStatusBadge = ({ status }) => {
+  const key = (status || "").toLowerCase();
+  const config = PAYMENT_STATUS_CONFIG[key] ?? PAYMENT_STATUS_CONFIG.pending;
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${config.classes}`}
+    >
+      {config.label}
+    </span>
+  );
+};
 
 const formatDate = (value) =>
   value
@@ -31,25 +141,9 @@ const formatDateTime = (value) =>
       })
     : "-";
 
-const StatusBadge = ({ status }) => {
-  const map = {
-    active: "bg-emerald-100 text-emerald-700 border-emerald-200",
-    paused: "bg-amber-100 text-amber-700 border-amber-200",
-    cancelled: "bg-rose-100 text-rose-700 border-rose-200",
-    past_due: "bg-red-100 text-red-700 border-red-200",
-    expired: "bg-slate-100 text-slate-700 border-slate-200",
-    pending: "bg-sky-100 text-sky-700 border-sky-200",
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border ${map[status] || map.pending}`}
-    >
-      {status === "past_due" ? "Payment Failed" : status}
-    </span>
-  );
-};
-
+// ─────────────────────────────────────────────────────────────────────────────
+// ConfirmModal — unchanged from original
+// ─────────────────────────────────────────────────────────────────────────────
 const ConfirmModal = ({
   open,
   onClose,
@@ -66,6 +160,7 @@ const ConfirmModal = ({
       : action === "pause"
         ? "Pause Subscription"
         : "Resume Subscription";
+
   const description =
     action === "cancel"
       ? "Cancelling will stop all future renewals for this subscription."
@@ -119,7 +214,11 @@ const ConfirmModal = ({
           </Button>
           <Button
             onClick={onConfirm}
-            className={`rounded-2xl ${action === "cancel" ? "bg-red-500 hover:bg-red-600 text-white" : "bg-bree-primary hover:bg-bree-primary-hover text-white"}`}
+            className={`rounded-2xl ${
+              action === "cancel"
+                ? "bg-red-500 hover:bg-red-600 text-white"
+                : "bg-bree-primary hover:bg-bree-primary-hover text-white"
+            }`}
           >
             {action === "cancel"
               ? "Confirm Cancellation"
@@ -133,6 +232,9 @@ const ConfirmModal = ({
   );
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// AdminSubscriptionDetails
+// ─────────────────────────────────────────────────────────────────────────────
 const AdminSubscriptionDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -144,7 +246,6 @@ const AdminSubscriptionDetails = () => {
 
   const loadDetails = useCallback(async () => {
     setLoading(true);
-
     try {
       const payload = await fetchAdminSubscriptionDetails(id);
       setData(payload);
@@ -166,20 +267,19 @@ const AdminSubscriptionDetails = () => {
       toast.error("Please enter a cancellation reason.");
       return;
     }
-
     try {
-      if (action === "pause") {
-        await pauseAdminSubscription(id);
-        toast.success("Subscription paused.");
-      }
-      if (action === "resume") {
-        await resumeAdminSubscription(id);
-        toast.success("Subscription resumed.");
-      }
-      if (action === "cancel") {
+      if (action === "pause") await pauseAdminSubscription(id);
+      if (action === "resume") await resumeAdminSubscription(id);
+      if (action === "cancel")
         await cancelAdminSubscription(id, cancelReason.trim());
-        toast.success("Subscription cancelled.");
-      }
+
+      toast.success(
+        action === "pause"
+          ? "Subscription paused."
+          : action === "resume"
+            ? "Subscription resumed."
+            : "Subscription cancelled.",
+      );
       setConfirm({ open: false, action: null });
       loadDetails();
     } catch (err) {
@@ -221,17 +321,47 @@ const AdminSubscriptionDetails = () => {
   }
 
   const { subscription, billingHistory, renewalOrders } = data;
-  const hasPause = subscription.subscriptionStatus === "active";
-  const hasResume =
-    subscription.subscriptionStatus === "paused" ||
-    subscription.subscriptionStatus === "past_due";
-  const hasCancel =
-    subscription.subscriptionStatus !== "cancelled" &&
-    subscription.subscriptionStatus !== "expired";
+
+  // ── Derive a single display status for every UI element on this page ───────
+  // We compute this once here so the badge, action buttons, and Razorpay info
+  // section all read from the same source of truth.
+  //
+  // Example: subscription_status = "active", order_status = "cancelled"
+  //   → displayStatus = "cancellation_requested"
+  //   → Badge shows  "Cancellation Requested"  (not "Active")
+  //   → Pause hidden, Cancel hidden, Resume shown
+  const displayStatus = getDisplayStatus(
+    subscription.subscriptionStatus,
+    subscription.orderStatus,
+  );
+
+  // ── Action button visibility ───────────────────────────────────────────────
+  //
+  // Pause:
+  //   Only when the subscription is genuinely active and NOT winding down.
+  //   "cancellation_requested" is excluded because Razorpay will cancel it
+  //   automatically at cycle end — pausing on top of that is meaningless.
+  const canPause = displayStatus === "active";
+
+  // Resume:
+  //   Applies when paused or payment is past_due.
+  //   NOT for "cancellation_requested" — the subscription is already set to
+  //   cancel; if the admin wants to keep it they must re-subscribe.
+  const canResume = displayStatus === "paused" || displayStatus === "past_due";
+
+  // Cancel:
+  //   Hidden for already-cancelled, expired, and cancellation_requested.
+  //   Triggering a second cancel on a cancellation_requested subscription
+  //   would error on Razorpay and confuse the admin.
+  const canCancel =
+    displayStatus !== "cancelled" &&
+    displayStatus !== "expired" &&
+    displayStatus !== "cancellation_requested";
 
   return (
     <AdminLayout>
       <div className="p-4 md:p-8 bg-bree-bg min-h-screen">
+        {/* ── Page header + action buttons ─────────────────────────────────── */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-8">
           <div>
             <h1 className="text-3xl font-bold text-bree-text-primary">
@@ -241,6 +371,7 @@ const AdminSubscriptionDetails = () => {
               Manage a single subscription lifecycle and review renewal history.
             </p>
           </div>
+
           <div className="flex flex-wrap gap-3">
             <Button
               onClick={() => navigate(-1)}
@@ -248,7 +379,9 @@ const AdminSubscriptionDetails = () => {
             >
               <ArrowLeft className="w-4 h-4 mr-2" /> Back
             </Button>
-            {hasPause && (
+
+            {/* Pause — only for genuinely active subscriptions */}
+            {canPause && (
               <Button
                 onClick={() => setConfirm({ open: true, action: "pause" })}
                 className="rounded-2xl bg-amber-100 text-amber-700 hover:bg-amber-200"
@@ -256,7 +389,9 @@ const AdminSubscriptionDetails = () => {
                 <Pause className="w-4 h-4 mr-2" /> Pause
               </Button>
             )}
-            {hasResume && (
+
+            {/* Resume — for paused or past_due */}
+            {canResume && (
               <Button
                 onClick={() => setConfirm({ open: true, action: "resume" })}
                 className="rounded-2xl bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
@@ -264,7 +399,10 @@ const AdminSubscriptionDetails = () => {
                 <Play className="w-4 h-4 mr-2" /> Resume
               </Button>
             )}
-            {hasCancel && (
+
+            {/* Cancel — hidden when already cancelled / expired /
+                cancellation already pending */}
+            {canCancel && (
               <Button
                 onClick={() => setConfirm({ open: true, action: "cancel" })}
                 className="rounded-2xl bg-rose-100 text-rose-700 hover:bg-rose-200"
@@ -276,7 +414,9 @@ const AdminSubscriptionDetails = () => {
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-6">
+          {/* ── LEFT COLUMN ──────────────────────────────────────────────── */}
           <div className="space-y-6">
+            {/* Subscription Summary */}
             <div className="rounded-3xl bg-white border border-bree-border p-6 shadow-sm">
               <div className="flex items-center justify-between mb-6 gap-4">
                 <div>
@@ -287,7 +427,13 @@ const AdminSubscriptionDetails = () => {
                     Key subscription identifiers and billing cadence.
                   </p>
                 </div>
-                <StatusBadge status={subscription.subscriptionStatus} />
+
+                {/*
+                  Badge uses displayStatus — NOT subscription.subscriptionStatus.
+                  When subscription_status="active" + order_status="cancelled"
+                  this shows "Cancellation Requested" instead of "Active".
+                */}
+                <StatusBadge status={displayStatus} />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -304,7 +450,13 @@ const AdminSubscriptionDetails = () => {
                     `₹${subscription.amount?.toLocaleString("en-IN")}`,
                   ],
                   ["Created", formatDateTime(subscription.startDate)],
-                  ["Last Renewal", formatDateTime(subscription.lastRenewal)],
+                  // Req 1: no successful renewal yet → "Not Renewed Yet", never "-"
+                  [
+                    "Last Renewal",
+                    subscription.lastRenewal
+                      ? formatDateTime(subscription.lastRenewal)
+                      : "Not Renewed Yet",
+                  ],
                   ["Next Billing", formatDate(subscription.nextBillingDate)],
                 ].map(([label, value]) => (
                   <div key={label}>
@@ -319,6 +471,7 @@ const AdminSubscriptionDetails = () => {
               </div>
             </div>
 
+            {/* Customer Information */}
             <div className="rounded-3xl bg-white border border-bree-border p-6 shadow-sm">
               <h3 className="text-lg font-semibold text-bree-text-primary mb-4">
                 Customer Information
@@ -328,7 +481,8 @@ const AdminSubscriptionDetails = () => {
                   ["Name", subscription.customerName],
                   ["Email", subscription.email],
                   ["Phone", subscription.phone],
-                  ["Linked Order", subscription.razorpayOrderId || "-"],
+                  // Req 2: show the order UUID directly — always present
+                  ["Linked Order", subscription.id],
                 ].map(([label, value]) => (
                   <div key={label}>
                     <p className="text-xs text-bree-text-secondary uppercase tracking-[0.18em] mb-2">
@@ -342,6 +496,7 @@ const AdminSubscriptionDetails = () => {
               </div>
             </div>
 
+            {/* Address Information */}
             <div className="rounded-3xl bg-white border border-bree-border p-6 shadow-sm">
               <h3 className="text-lg font-semibold text-bree-text-primary mb-4">
                 Address Information
@@ -383,6 +538,7 @@ const AdminSubscriptionDetails = () => {
               </div>
             </div>
 
+            {/* Product Information */}
             <div className="rounded-3xl bg-white border border-bree-border p-6 shadow-sm">
               <h3 className="text-lg font-semibold text-bree-text-primary mb-4">
                 Product Information
@@ -417,43 +573,10 @@ const AdminSubscriptionDetails = () => {
                 ))}
               </div>
             </div>
-          </div>
 
-          <div className="space-y-6">
-            <div className="rounded-3xl bg-white border border-bree-border p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-bree-text-primary mb-4">
-                Razorpay Information
-              </h3>
-              <div className="space-y-4">
-                {[
-                  [
-                    "Razorpay Subscription ID",
-                    subscription.razorpaySubscriptionId,
-                  ],
-                  ["Razorpay Plan ID", subscription.razorpayPlanId],
-                  ["Subscription Status", subscription.subscriptionStatus],
-                  ["Payment Status", subscription.paymentStatus],
-                  ["Cancel Reason", subscription.cancelReason],
-                  ["Cancelled By", subscription.cancelledBy],
-                  [
-                    "Cancelled At",
-                    subscription.cancelledAt
-                      ? formatDateTime(subscription.cancelledAt)
-                      : "-",
-                  ],
-                ].map(([label, value]) => (
-                  <div key={label}>
-                    <p className="text-xs text-bree-text-secondary uppercase tracking-[0.18em] mb-2">
-                      {label}
-                    </p>
-                    <p className="text-sm font-semibold text-bree-text-primary">
-                      {value || "-"}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
+            {/* ── Billing History — full left-column width ─────────────────
+                Moved from right sidebar (420 px) so the 5-column table has
+                enough horizontal room and never clips headers or cell values. */}
             <div className="rounded-3xl bg-white border border-bree-border p-6 shadow-sm">
               <h3 className="text-lg font-semibold text-bree-text-primary mb-4">
                 Billing History
@@ -471,7 +594,7 @@ const AdminSubscriptionDetails = () => {
                       ].map((heading) => (
                         <th
                           key={heading}
-                          className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-bree-text-secondary"
+                          className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-bree-text-secondary whitespace-nowrap"
                         >
                           {heading}
                         </th>
@@ -485,23 +608,29 @@ const AdminSubscriptionDetails = () => {
                           key={payment.id}
                           className="border-t border-bree-border hover:bg-bree-bg/50 transition-colors"
                         >
-                          <td className="px-4 py-3 text-sm text-bree-text-secondary">
+                          <td className="px-4 py-3 text-sm text-bree-text-secondary whitespace-nowrap">
                             {formatDateTime(payment.updated_at)}
                           </td>
-                          <td className="px-4 py-3 text-sm font-semibold text-bree-text-primary">
+                          <td className="px-4 py-3 text-sm font-semibold text-bree-text-primary whitespace-nowrap">
                             ₹
                             {Number(payment.amount || 0).toLocaleString(
                               "en-IN",
                             )}
                           </td>
-                          <td className="px-4 py-3 text-sm text-bree-text-primary">
+                          <td className="px-4 py-3 text-sm text-bree-text-primary font-mono text-xs">
                             {payment.order_id}
                           </td>
-                          <td className="px-4 py-3 text-sm text-bree-text-secondary">
-                            {payment.razorpay_payment_id || "-"}
+                          <td className="px-4 py-3 text-sm text-bree-text-secondary font-mono text-xs whitespace-nowrap">
+                            {payment.razorpay_payment_id ? (
+                              payment.razorpay_payment_id
+                            ) : (
+                              <span className="font-sans text-bree-text-secondary italic not-italic text-xs">
+                                Awaiting Payment
+                              </span>
+                            )}
                           </td>
-                          <td className="px-4 py-3 text-sm text-bree-text-secondary">
-                            {payment.status}
+                          <td className="px-4 py-3">
+                            <PaymentStatusBadge status={payment.status} />
                           </td>
                         </tr>
                       ))
@@ -511,7 +640,7 @@ const AdminSubscriptionDetails = () => {
                           colSpan={5}
                           className="px-4 py-10 text-center text-sm text-bree-text-secondary"
                         >
-                          No billing records found.
+                          No payment history available.
                         </td>
                       </tr>
                     )}
@@ -520,6 +649,9 @@ const AdminSubscriptionDetails = () => {
               </div>
             </div>
 
+            {/* ── Renewal Orders — full left-column width ──────────────────
+                Moved from right sidebar (420 px) so the 5-column table has
+                enough horizontal room and never clips headers or cell values. */}
             <div className="rounded-3xl bg-white border border-bree-border p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-bree-text-primary">
@@ -536,20 +668,22 @@ const AdminSubscriptionDetails = () => {
               <div className="overflow-x-auto">
                 <table className="min-w-full text-left">
                   <thead className="bg-bree-bg/60">
-                    {[
-                      "Order ID",
-                      "Renewal Date",
-                      "Amount",
-                      "Order Status",
-                      "Payment Status",
-                    ].map((heading) => (
-                      <th
-                        key={heading}
-                        className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-bree-text-secondary"
-                      >
-                        {heading}
-                      </th>
-                    ))}
+                    <tr>
+                      {[
+                        "Order ID",
+                        "Renewal Date",
+                        "Amount",
+                        "Order Status",
+                        "Payment Status",
+                      ].map((heading) => (
+                        <th
+                          key={heading}
+                          className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-bree-text-secondary whitespace-nowrap"
+                        >
+                          {heading}
+                        </th>
+                      ))}
+                    </tr>
                   </thead>
                   <tbody>
                     {renewalOrders.length ? (
@@ -558,20 +692,26 @@ const AdminSubscriptionDetails = () => {
                           key={order.id}
                           className="border-t border-bree-border hover:bg-bree-bg/50 transition-colors"
                         >
-                          <td className="px-4 py-3 text-sm font-medium text-bree-text-primary">
+                          <td className="px-4 py-3 text-sm font-medium text-bree-text-primary font-mono text-xs">
                             {order.id}
                           </td>
-                          <td className="px-4 py-3 text-sm text-bree-text-secondary">
+                          <td className="px-4 py-3 text-sm text-bree-text-secondary whitespace-nowrap">
                             {formatDateTime(order.created_at)}
                           </td>
-                          <td className="px-4 py-3 text-sm font-semibold text-bree-text-primary">
+                          <td className="px-4 py-3 text-sm font-semibold text-bree-text-primary whitespace-nowrap">
                             ₹{Number(order.total || 0).toLocaleString("en-IN")}
                           </td>
-                          <td className="px-4 py-3 text-sm text-bree-text-secondary">
-                            {order.order_status}
+                          <td className="px-4 py-3">
+                            <StatusBadge
+                              status={getDisplayStatus(
+                                order.subscription_status ??
+                                  subscription.subscriptionStatus,
+                                order.order_status,
+                              )}
+                            />
                           </td>
-                          <td className="px-4 py-3 text-sm text-bree-text-secondary">
-                            {order.payment_status}
+                          <td className="px-4 py-3">
+                            <PaymentStatusBadge status={order.payment_status} />
                           </td>
                         </tr>
                       ))
@@ -587,6 +727,71 @@ const AdminSubscriptionDetails = () => {
                     )}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          </div>
+
+          {/* ── RIGHT COLUMN — Razorpay Information only ─────────────────── */}
+          <div className="space-y-6">
+            {/* Razorpay Information */}
+            <div className="rounded-3xl bg-white border border-bree-border p-6 shadow-sm">
+              <h3 className="text-lg font-semibold text-bree-text-primary mb-4">
+                Razorpay Information
+              </h3>
+              <div className="space-y-4">
+                {[
+                  [
+                    "Razorpay Subscription ID",
+                    subscription.razorpaySubscriptionId,
+                  ],
+                  ["Razorpay Plan ID", subscription.razorpayPlanId],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <p className="text-xs text-bree-text-secondary uppercase tracking-[0.18em] mb-2">
+                      {label}
+                    </p>
+                    <p className="text-sm font-semibold text-bree-text-primary">
+                      {value || "-"}
+                    </p>
+                  </div>
+                ))}
+
+                {/* Req 4: Payment Status — coloured badge, not plain text */}
+                <div>
+                  <p className="text-xs text-bree-text-secondary uppercase tracking-[0.18em] mb-2">
+                    Payment Status
+                  </p>
+                  <PaymentStatusBadge status={subscription.paymentStatus} />
+                </div>
+
+                {/* Req 3: Cancel Reason — if cancelled with no explicit reason,
+                    show a human-readable default instead of "-" or null */}
+                <div>
+                  <p className="text-xs text-bree-text-secondary uppercase tracking-[0.18em] mb-2">
+                    Cancel Reason
+                  </p>
+                  <p className="text-sm font-semibold text-bree-text-primary">
+                    {subscription.cancelReason
+                      ? subscription.cancelReason
+                      : subscription.orderStatus === "cancelled"
+                        ? "Customer Requested Cancellation"
+                        : "-"}
+                  </p>
+                </div>
+
+                {/*
+                  Subscription Status uses displayStatus so it shows
+                  "Cancellation Requested" when subscription_status = "active"
+                  and order_status = "cancelled" — never shows raw "Active"
+                  when the subscription is actually winding down.
+                  Req 8: "Cancelled By" and "Cancelled At" removed — not stored.
+                */}
+                <div>
+                  <p className="text-xs text-bree-text-secondary uppercase tracking-[0.18em] mb-2">
+                    Subscription Status
+                  </p>
+                  <StatusBadge status={displayStatus} />
+                </div>
               </div>
             </div>
           </div>

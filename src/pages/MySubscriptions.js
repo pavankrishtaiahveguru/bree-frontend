@@ -20,6 +20,7 @@ import {
   LayoutGrid,
   TrendingUp,
   Package,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -61,17 +62,29 @@ const formatAmount = (amount) => {
   }).format(amount);
 };
 
-const statusStyles = {
-  active: "bg-bree-success/10 text-bree-success border border-bree-success/20",
-  paused: "bg-orange-100 text-orange-600 border border-orange-200",
-  cancelled: "bg-red-100 text-red-600 border border-red-200",
-  pending: "bg-bree-primary/10 text-bree-primary border border-bree-primary/20",
-};
+// ── Derive whether a cancellation has been requested but the billing cycle
+//    hasn't ended yet. Backend models this purely via
+//    subscription_status = "cancellation_requested" (order_status stays
+//    "active"). order_status is intentionally NOT consulted here.
+const isCancellationRequested = (subscription) =>
+  (subscription.subscription_status || "").toLowerCase() ===
+  "cancellation_requested";
 
 /* ─────────────────── sub-components ──────────────────── */
 
-function StatusBadge({ status }) {
-  const s = (status || "").toLowerCase();
+// ── StatusBadge handles the cancellation_requested state ──────────────────
+function StatusBadge({ subscription }) {
+  const s = (subscription.subscription_status || "").toLowerCase();
+  const cancelRequested = isCancellationRequested(subscription);
+
+  if (cancelRequested)
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider bg-red-50 text-red-600 border border-red-200">
+        <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+        Cancellation Requested
+      </span>
+    );
+
   if (s === "active" || s === "created")
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -79,6 +92,7 @@ function StatusBadge({ status }) {
         Active
       </span>
     );
+
   if (s === "paused" || s === "pending")
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
@@ -86,9 +100,43 @@ function StatusBadge({ status }) {
         Paused
       </span>
     );
+
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider bg-red-50 text-red-600 border border-red-200">
       <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+      Cancelled
+    </span>
+  );
+}
+
+// ── Compact chip used in the card hero and the sidebar renewal list ────────
+function StatusChip({ subscription }) {
+  const s = (subscription.subscription_status || "").toLowerCase();
+  const cancelRequested = isCancellationRequested(subscription);
+
+  if (cancelRequested)
+    return (
+      <span className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider border bg-red-400/20 text-white border-red-300/30">
+        Cancellation Requested
+      </span>
+    );
+
+  if (s === "active" || s === "created")
+    return (
+      <span className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider border bg-emerald-400/25 text-white border-emerald-300/40">
+        Active
+      </span>
+    );
+
+  if (s === "paused" || s === "pending")
+    return (
+      <span className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider border bg-amber-400/25 text-white border-amber-300/40">
+        Paused
+      </span>
+    );
+
+  return (
+    <span className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider border bg-red-400/20 text-white border-red-300/30">
       Cancelled
     </span>
   );
@@ -136,12 +184,21 @@ function SubscriptionCard({
   onAction,
   onNavigate,
 }) {
-  const subId = subscription.razorpay_subscription_id || subscription.order_id;
+  console.log("ORDER ID:", subscription.order_id);
+  console.log("RAZORPAY SUB ID:", subscription.razorpay_subscription_id);
+  const subId = subscription.razorpay_subscription_id;
   const isLoading = actionLoadingId === subId;
   const rawStatus = (subscription.subscription_status || "").toLowerCase();
-  const isActive = rawStatus === "active" || rawStatus === "created";
-  const isPaused = rawStatus === "paused" || rawStatus === "pending";
-  const isCancelled = !isActive && !isPaused;
+
+  // ── Derive the four mutually-exclusive display states, all from
+  //    subscription_status only (no order_status checks). ─────────────────
+  const cancelRequested = isCancellationRequested(subscription);
+  const isActive =
+    !cancelRequested && (rawStatus === "active" || rawStatus === "created");
+  const isPaused =
+    !cancelRequested && (rawStatus === "paused" || rawStatus === "pending");
+  const isCancelled = !isActive && !isPaused && !cancelRequested;
+
   const product = subscription.items?.[0] || {};
 
   return (
@@ -176,29 +233,43 @@ function SubscriptionCard({
               </h2>
             </div>
           </div>
-          {/* status chip in white overlay style */}
-          <span
-            className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider border ${
-              isActive
-                ? "bg-emerald-400/25 text-white border-emerald-300/40"
-                : isPaused
-                  ? "bg-amber-400/25 text-white border-amber-300/40"
-                  : "bg-red-400/20 text-white border-red-300/30"
-            }`}
-          >
-            {subscription.statusLabel}
-          </span>
+          {/* Use StatusChip — it reads the full subscription object */}
+          <StatusChip subscription={subscription} />
         </div>
       </div>
 
       {/* card body */}
       <div className="flex-1 flex flex-col p-5 gap-4">
+        {/* ── Cancellation warning banner ─────────────────────────────────
+            Shown when the user has already requested cancellation but the
+            billing cycle hasn't ended yet
+            (subscription_status === "cancellation_requested"). */}
+        {cancelRequested && (
+          <div className="rounded-2xl bg-red-50 border border-red-200 px-4 py-3.5 flex flex-col gap-2">
+            <div className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span className="text-xs font-bold uppercase tracking-wide">
+                Cancellation Requested
+              </span>
+            </div>
+            <p className="text-xs text-red-700 leading-relaxed">
+              Your subscription remains active until the end of the current
+              billing cycle. Auto-renewal has been disabled and the subscription
+              will end automatically after{" "}
+              <span className="font-semibold">
+                {formatDate(subscription.next_billing_date)}
+              </span>
+              .
+            </p>
+          </div>
+        )}
+
         {/* key stats row */}
         <div className="grid grid-cols-3 gap-2">
           {[
             { label: "Frequency", value: subscription.frequencyLabel },
             {
-              label: "Next Renewal",
+              label: cancelRequested ? "Active Until" : "Next Renewal",
               value: formatShortDate(subscription.next_billing_date),
             },
             {
@@ -224,8 +295,8 @@ function SubscriptionCard({
           ))}
         </div>
 
-        {/* next renewal highlight */}
-        {!isCancelled && subscription.next_billing_date && (
+        {/* next renewal highlight — hidden when cancellation is requested */}
+        {!isCancelled && !cancelRequested && subscription.next_billing_date && (
           <div className="rounded-2xl bg-bree-primary/5 border border-bree-primary/15 px-4 py-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-bree-primary">
               <CalendarDays className="w-4 h-4 shrink-0" />
@@ -270,7 +341,15 @@ function SubscriptionCard({
           ))}
         </div>
 
-        {/* actions */}
+        {/* ── action buttons ──────────────────────────────────────────────
+            Pause: shown only for active/created.
+            Resume: shown only for paused/pending.
+            Cancel: shown only for active/created/paused/pending — hidden for
+                    cancellation_requested and cancelled.
+            Hidden entirely (pause/resume/cancel) when cancellation has been
+            requested — there's nothing meaningful the user can do until the
+            cycle ends and the webhook flips subscription_status to
+            "cancelled". */}
         <div className="flex flex-wrap gap-2 pt-1 mt-auto">
           {isActive && (
             <Button
@@ -307,7 +386,9 @@ function SubscriptionCard({
               )}
             </Button>
           )}
-          {!isCancelled && (
+          {/* Cancel button: shown for active and paused, never for
+              cancellation-requested or already-cancelled states */}
+          {(isActive || isPaused) && (
             <Button
               type="button"
               onClick={() => onAction(subId, "cancel")}
@@ -325,6 +406,7 @@ function SubscriptionCard({
               )}
             </Button>
           )}
+          {/* View Details always visible */}
           <Button
             type="button"
             onClick={() =>
@@ -386,11 +468,21 @@ const MySubscriptions = () => {
             ? await resumeSubscription(subscriptionId)
             : await cancelSubscription(subscriptionId);
 
-      const status = response.subscription_status || response.status || action;
+      // FIX: Razorpay's cancel response (cancel_at_cycle_end: 1) returns
+      // status: "active" — using that directly would briefly set
+      // subscription_status back to "active" before being overridden,
+      // causing a UI flicker. For "cancel" we go straight to
+      // "cancellation_requested" instead of reading the response status.
+      const status =
+        action === "cancel"
+          ? "cancellation_requested"
+          : response.subscription_status || response.status || action;
+
       updateSubscriptionInList(subscriptionId, (item) => ({
         ...item,
         subscription_status: status,
       }));
+
       toast.success(`Subscription ${action} requested successfully.`);
     } catch (error) {
       toast.error(error.message || `Unable to ${action} subscription.`);
@@ -402,8 +494,12 @@ const MySubscriptions = () => {
   const normalizedSubscriptions = useMemo(() => {
     return subscriptions.map((subscription) => ({
       ...subscription,
-      statusLabel:
-        subscription.subscription_status === "paused"
+      // statusLabel reflects the cancellation_requested state for any
+      // component that still uses the string label (e.g. sidebar chips).
+      // Driven entirely by subscription_status — no order_status checks.
+      statusLabel: isCancellationRequested(subscription)
+        ? "Cancellation Requested"
+        : subscription.subscription_status === "paused"
           ? "Paused"
           : subscription.subscription_status === "cancelled"
             ? "Cancelled"
@@ -415,16 +511,24 @@ const MySubscriptions = () => {
   }, [subscriptions]);
 
   /* summary stats */
+
+  // ── Active Plans: count only subscription_status "active"/"created".
+  //    Excludes "cancellation_requested" and "cancelled".
   const activePlans = normalizedSubscriptions.filter(
     (s) =>
-      (s.subscription_status || "").toLowerCase() === "active" ||
-      (s.subscription_status || "").toLowerCase() === "created",
+      !isCancellationRequested(s) &&
+      ((s.subscription_status || "").toLowerCase() === "active" ||
+        (s.subscription_status || "").toLowerCase() === "created"),
   ).length;
 
+  // ── Upcoming Renewals: subscriptions still renewing — excludes
+  //    "cancelled" and "cancellation_requested" (auto-renewal is disabled
+  //    once cancellation has been requested, so it's not "upcoming").
   const upcomingRenewals = normalizedSubscriptions.filter(
     (s) =>
       s.next_billing_date &&
-      !["cancelled"].includes((s.subscription_status || "").toLowerCase()),
+      !["cancelled"].includes((s.subscription_status || "").toLowerCase()) &&
+      !isCancellationRequested(s),
   ).length;
 
   return (
@@ -598,7 +702,10 @@ const MySubscriptions = () => {
                             {formatShortDate(s.next_billing_date)}
                           </p>
                         </div>
-                        <StatusBadge status={s.subscription_status} />
+                        {/* ── Pass full subscription object so StatusBadge
+                            can detect cancellation_requested via
+                            subscription_status ── */}
+                        <StatusBadge subscription={s} />
                       </div>
                     ))}
                 </div>

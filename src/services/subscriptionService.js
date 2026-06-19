@@ -28,22 +28,15 @@ export const getSubscriptions = async () => {
 };
 
 export const getSubscription = async (subscriptionId) => {
-  try {
-    const response = await axios.get(`/api/subscriptions/${subscriptionId}`);
-    return response.data;
-  } catch (error) {
-    if (error.response?.status === 404) {
-      const subscriptions = await getSubscriptions();
-      return (
-        subscriptions.find(
-          (item) =>
-            item.order_id === subscriptionId ||
-            item.razorpay_subscription_id === subscriptionId,
-        ) || null
-      );
-    }
-    throw new Error(getApiErrorMessage(error));
-  }
+  const subscriptions = await getSubscriptions();
+
+  return (
+    subscriptions.find(
+      (item) =>
+        item.order_id === subscriptionId ||
+        item.razorpay_subscription_id === subscriptionId,
+    ) || null
+  );
 };
 
 export const pauseSubscription = async (subscriptionId) => {

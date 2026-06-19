@@ -20,6 +20,20 @@ import axios from "@/lib/api";
 import { openRazorpayCheckout } from "@/lib/razorpayLoader";
 import { createSubscription } from "@/services/subscriptionService";
 
+// ── verifySubscriptionPayment ────────────────────────────────────────────────
+// Calls the backend /api/payment/verify endpoint with the subscription payment
+// response. This is required to update payment_status → 'paid',
+// order_status → 'active', and subscription_status → 'active' in the DB.
+// Without this call those fields remain 'pending' / 'created' forever.
+const verifySubscriptionPayment = async (razorpayResponse) => {
+  const response = await axios.post("/api/payment/verify", {
+    razorpay_payment_id: razorpayResponse.razorpay_payment_id,
+    razorpay_subscription_id: razorpayResponse.razorpay_subscription_id,
+    razorpay_signature: razorpayResponse.razorpay_signature,
+  });
+  return response.data;
+};
+
 const formatAddress = (address) => {
   if (!address) return "";
   return [
@@ -85,6 +99,10 @@ const SubscriptionCheckout = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
+  // FIX: tracks a 409 "duplicate active subscription" response from the
+  // backend. Once set, the CTA stays disabled so the user can't keep
+  // retrying checkout for a product they're already subscribed to.
+  const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
 
   useEffect(() => {
     if (!product) {
@@ -227,18 +245,56 @@ const SubscriptionCheckout = () => {
       });
 
       if (checkoutResult) {
+        // ── FIX: Call verifyPayment so the backend confirms the payment and
+        // updates payment_status → 'paid', order_status → 'active', and
+        // subscription_status → 'active'. Without this the DB rows stay in
+        // their initial 'pending' / 'created' state indefinitely.
+        let verifyResult = {};
+        try {
+          const verifyRes = await axios.post("/api/payment/verify", {
+            razorpay_payment_id: checkoutResult.razorpay_payment_id,
+            razorpay_subscription_id: checkoutResult.razorpay_subscription_id,
+            razorpay_signature: checkoutResult.razorpay_signature,
+          });
+          verifyResult = verifyRes.data || {};
+        } catch (verifyErr) {
+          // Non-blocking: if verify fails the Razorpay webhook will sync the DB.
+          // Still proceed to success page so the user is not left stranded.
+          console.error(
+            "[SubscriptionCheckout] verifyPayment call failed — webhook will sync later",
+            verifyErr?.response?.data?.message ||
+              verifyErr?.message ||
+              verifyErr,
+          );
+        }
+
         navigate("/subscription-success", {
           state: {
             product,
             frequency,
             subscriptionId: response.subscription_id,
-            subscriptionStatus: response.subscription_status || "active",
-            nextBillingDate: response.next_billing_date,
+            subscriptionStatus:
+              verifyResult.subscription_status ||
+              response.subscription_status ||
+              "active",
+            nextBillingDate:
+              verifyResult.next_billing_date || response.next_billing_date,
             subscriptionPrice,
           },
         });
       }
     } catch (error) {
+      // FIX: handle backend's 409 duplicate-active-subscription response.
+      // No Razorpay subscription, order, or payment record was created for
+      // this request — backend rejects before doing any of that work.
+      if (error?.response?.status === 409) {
+        setHasActiveSubscription(true);
+        toast.error(
+          "You already have an active subscription for this product.",
+        );
+        return;
+      }
+
       const message =
         error?.message ||
         error?.response?.data?.message ||
@@ -619,7 +675,7 @@ const SubscriptionCheckout = () => {
               <Button
                 type="button"
                 onClick={handleStartSubscription}
-                disabled={!canSubmit || isLoading}
+                disabled={!canSubmit || isLoading || hasActiveSubscription}
                 className="w-full py-6 rounded-full bg-bree-primary hover:bg-bree-primary-hover text-white font-semibold text-base shadow-sm transition-all duration-300 disabled:opacity-50"
               >
                 {isLoading ? (
@@ -627,6 +683,8 @@ const SubscriptionCheckout = () => {
                     <Loader2 className="w-5 h-5 animate-spin" />
                     Processing...
                   </span>
+                ) : hasActiveSubscription ? (
+                  "Already Subscribed"
                 ) : (
                   <span className="flex items-center justify-center gap-2">
                     <Lock className="w-4 h-4" />
@@ -635,9 +693,23 @@ const SubscriptionCheckout = () => {
                 )}
               </Button>
 
-              <p className="text-xs text-bree-text-secondary text-center mt-3">
-                Cash on Delivery is not available for subscriptions.
-              </p>
+              {hasActiveSubscription ? (
+                <p className="text-xs text-bree-text-secondary text-center mt-3">
+                  You already have an active subscription for this product.{" "}
+                  <button
+                    type="button"
+                    onClick={() => navigate("/subscriptions")}
+                    className="underline text-bree-primary font-medium"
+                  >
+                    Manage it here
+                  </button>
+                  .
+                </p>
+              ) : (
+                <p className="text-xs text-bree-text-secondary text-center mt-3">
+                  Cash on Delivery is not available for subscriptions.
+                </p>
+              )}
             </div>
 
             {/* What's Included */}

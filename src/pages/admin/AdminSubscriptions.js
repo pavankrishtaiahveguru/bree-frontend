@@ -51,6 +51,62 @@ const statusBadgeStyles = {
   past_due: "bg-rose-100 text-rose-700 border-rose-200",
   expired: "bg-slate-100 text-slate-700 border-slate-200",
   pending: "bg-sky-100 text-sky-700 border-sky-200",
+  // ── NEW: Razorpay keeps subscription_status = "active" when
+  // cancel_at_cycle_end=1 is used. We detect this by cross-checking
+  // order_status = "cancelled" and surface it as a distinct display state.
+  cancellation_requested: "bg-red-50 text-red-600 border-red-200",
+};
+
+// ── getDisplayStatus ────────────────────────────────────────────────────────
+// Derives the correct display status from both subscription_status and
+// order_status. The backend may return fields in either snake_case
+// (subscription_status, order_status) or camelCase (subscriptionStatus,
+// orderStatus) depending on which service/version is responding — we handle
+// both.
+//
+// States in priority order:
+//   cancellation_requested → subscription still active on Razorpay but the
+//     user/admin has already triggered cancellation with cancel_at_cycle_end=1.
+//     Razorpay won't flip subscription_status to "cancelled" until the billing
+//     cycle ends; the webhook does that. Until then we read order_status to
+//     know the user's intent.
+//   everything else → pass subscription_status through unchanged.
+const getDisplayStatus = (subscription) => {
+  const subscriptionStatus = (
+    subscription.subscriptionStatus ||
+    subscription.subscription_status ||
+    subscription.status ||
+    ""
+  ).toLowerCase();
+
+  const orderStatus = (
+    subscription.orderStatus ||
+    subscription.order_status ||
+    ""
+  ).toLowerCase();
+
+  if (subscriptionStatus === "active" && orderStatus === "cancelled") {
+    return "cancellation_requested";
+  }
+
+  return subscriptionStatus;
+};
+
+// ── Human-readable label for each display status ────────────────────────────
+// CSS `capitalize` only uppercases the very first letter of the whole string,
+// so "cancellation_requested" would render as "Cancellation_requested".
+// We map every status to its display string explicitly.
+const statusLabel = (displayStatus) => {
+  const labels = {
+    active: "Active",
+    paused: "Paused",
+    cancelled: "Cancelled",
+    past_due: "Payment Failed",
+    expired: "Expired",
+    pending: "Pending",
+    cancellation_requested: "Cancellation Requested",
+  };
+  return labels[displayStatus] ?? displayStatus;
 };
 
 const formatDate = (value) =>
@@ -402,96 +458,149 @@ const AdminSubscriptions = () => {
                   </tr>
                 ))
               ) : subscriptions.length ? (
-                subscriptions.map((subscription) => (
-                  <tr
-                    key={subscription.id}
-                    className="border-t border-bree-border hover:bg-bree-bg/40 transition-colors"
-                  >
-                    <td className="px-4 py-4 text-sm font-medium text-bree-primary">
-                      {subscription.id}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-bree-text-primary">
-                      {subscription.customerName}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-bree-text-secondary">
-                      {subscription.email}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-bree-text-secondary">
-                      {subscription.phone}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-bree-text-secondary">
-                      {subscription.product}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-bree-text-secondary">
-                      {subscription.frequency}
-                    </td>
-                    <td className="px-4 py-4 text-sm font-semibold text-bree-text-primary">
-                      ₹{subscription.amount.toLocaleString("en-IN")}
-                    </td>
-                    <td className="px-4 py-4">
-                      <span
-                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold capitalize border ${statusBadgeStyles[subscription.status] || "bg-slate-100 text-slate-700 border-slate-200"}`}
-                      >
-                        {subscription.status === "past_due"
-                          ? "Payment Failed"
-                          : subscription.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 text-sm text-bree-text-secondary">
-                      {formatDate(subscription.startDate)}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-bree-text-secondary">
-                      {formatDate(subscription.nextBillingDate)}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-bree-text-secondary">
-                      {subscription.renewalCount}
-                    </td>
-                    <td className="px-4 py-4 space-y-2">
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          navigate(`/admin/subscriptions/${subscription.id}`)
-                        }
-                        className="w-full rounded-2xl bg-slate-100 text-slate-700 hover:bg-slate-200"
-                      >
-                        <Eye className="w-4 h-4 mr-2" /> View
-                      </Button>
-                      {subscription.status === "active" && (
-                        <Button
-                          size="sm"
-                          onClick={() => openActionModal("pause", subscription)}
-                          className="w-full rounded-2xl bg-amber-100 text-amber-700 hover:bg-amber-200"
+                subscriptions.map((subscription) => {
+                  // ── Derive the single display status for this row ──────────
+                  // We compute this once per row and use it everywhere below
+                  // so the badge, button visibility, and debug log are always
+                  // in sync with each other.
+                  const displayStatus = getDisplayStatus(subscription);
+
+                  // ── Debug log — visible in browser DevTools console ───────
+                  // Helps confirm what the backend is actually sending and
+                  // what the UI has resolved the display status to.
+                  console.log("[ADMIN SUB STATUS]", {
+                    subscriptionId: subscription.id,
+                    subscriptionStatus:
+                      subscription.subscriptionStatus ||
+                      subscription.subscription_status,
+                    orderStatus:
+                      subscription.orderStatus || subscription.order_status,
+                    displayStatus,
+                  });
+
+                  return (
+                    <tr
+                      key={subscription.id}
+                      className="border-t border-bree-border hover:bg-bree-bg/40 transition-colors"
+                    >
+                      <td className="px-4 py-4 text-sm font-medium text-bree-primary">
+                        {subscription.id}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-bree-text-primary">
+                        {subscription.customerName}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-bree-text-secondary">
+                        {subscription.email}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-bree-text-secondary">
+                        {subscription.phone}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-bree-text-secondary">
+                        {subscription.product}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-bree-text-secondary">
+                        {subscription.frequency}
+                      </td>
+                      <td className="px-4 py-4 text-sm font-semibold text-bree-text-primary">
+                        ₹{subscription.amount.toLocaleString("en-IN")}
+                      </td>
+
+                      {/* ── Status badge ──────────────────────────────────────
+                          Uses displayStatus (not subscription.status) so that
+                          "cancellation_requested" gets its own red chip instead
+                          of being misread as "Active".
+                          statusLabel() maps the value to a proper human string
+                          because CSS capitalize alone can't handle underscores. */}
+                      <td className="px-4 py-4">
+                        <span
+                          className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${statusBadgeStyles[displayStatus] || "bg-slate-100 text-slate-700 border-slate-200"}`}
                         >
-                          <Pause className="w-4 h-4 mr-2" /> Pause
-                        </Button>
-                      )}
-                      {(subscription.status === "paused" ||
-                        subscription.status === "past_due") && (
+                          {statusLabel(displayStatus)}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-4 text-sm text-bree-text-secondary">
+                        {formatDate(subscription.startDate)}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-bree-text-secondary">
+                        {formatDate(subscription.nextBillingDate)}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-bree-text-secondary">
+                        {subscription.renewalCount}
+                      </td>
+
+                      {/* ── Action buttons ────────────────────────────────────
+                          All conditions use displayStatus so they stay in sync
+                          with the badge above.
+
+                          View      — always visible
+                          Pause     — only when genuinely active (not when
+                                      cancellation is pending)
+                          Resume    — only when paused or past_due
+                          Cancel    — hidden for: cancelled, expired, AND
+                                      cancellation_requested (already on its way
+                                      out — no point triggering a second cancel) */}
+                      <td className="px-4 py-4 space-y-2">
                         <Button
                           size="sm"
                           onClick={() =>
-                            openActionModal("resume", subscription)
+                            navigate(`/admin/subscriptions/${subscription.id}`)
                           }
-                          className="w-full rounded-2xl bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                          className="w-full rounded-2xl bg-slate-100 text-slate-700 hover:bg-slate-200"
                         >
-                          <Play className="w-4 h-4 mr-2" /> Resume
+                          <Eye className="w-4 h-4 mr-2" /> View
                         </Button>
-                      )}
-                      {subscription.status !== "cancelled" &&
-                        subscription.status !== "expired" && (
+
+                        {/* Pause: only when subscription is genuinely active.
+                            cancellation_requested is excluded because the
+                            subscription is already winding down. */}
+                        {displayStatus === "active" && (
                           <Button
                             size="sm"
                             onClick={() =>
-                              openActionModal("cancel", subscription)
+                              openActionModal("pause", subscription)
                             }
-                            className="w-full rounded-2xl bg-rose-100 text-rose-700 hover:bg-rose-200"
+                            className="w-full rounded-2xl bg-amber-100 text-amber-700 hover:bg-amber-200"
                           >
-                            <Trash className="w-4 h-4 mr-2" /> Cancel
+                            <Pause className="w-4 h-4 mr-2" /> Pause
                           </Button>
                         )}
-                    </td>
-                  </tr>
-                ))
+
+                        {/* Resume: paused subscriptions and those with a
+                            failed payment can be reactivated. */}
+                        {(displayStatus === "paused" ||
+                          displayStatus === "past_due") && (
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              openActionModal("resume", subscription)
+                            }
+                            className="w-full rounded-2xl bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                          >
+                            <Play className="w-4 h-4 mr-2" /> Resume
+                          </Button>
+                        )}
+
+                        {/* Cancel: hidden for already-cancelled, expired, and
+                            cancellation_requested (duplicate cancel would error
+                            on Razorpay and confuse the admin). */}
+                        {displayStatus !== "cancelled" &&
+                          displayStatus !== "expired" &&
+                          displayStatus !== "cancellation_requested" && (
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                openActionModal("cancel", subscription)
+                              }
+                              className="w-full rounded-2xl bg-rose-100 text-rose-700 hover:bg-rose-200"
+                            >
+                              <Trash className="w-4 h-4 mr-2" /> Cancel
+                            </Button>
+                          )}
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
                   <td

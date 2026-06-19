@@ -135,7 +135,10 @@ export const openRazorpayCheckout = async (config) => {
   }
 
   return new Promise((resolve, reject) => {
-    // Flags to prevent handler recursion and multiple resolutions
+    // Single pair of flags. These are the ONLY place settled-state is recorded.
+    // Nothing else (handler, payment.failed, ondismiss) should set these flags
+    // directly — they must always go through safeResolve/safeReject so the
+    // promise can never be left unsettled.
     let handlerCalled = false;
     let dismissCalled = false;
 
@@ -148,7 +151,7 @@ export const openRazorpayCheckout = async (config) => {
 
     const safeReject = (error) => {
       if (!handlerCalled && !dismissCalled) {
-        handlerCalled = true;
+        dismissCalled = true;
         reject(error);
       }
     };
@@ -166,17 +169,23 @@ export const openRazorpayCheckout = async (config) => {
         prefill: config.prefill,
         theme: config.theme || { color: "#7BA05B" },
 
+        // FIX: previously this handler set `handlerCalled = true` BEFORE
+        // calling safeResolve(), so safeResolve's own guard
+        // (`!handlerCalled && !dismissCalled`) was already false and
+        // resolve() never ran. That left openRazorpayCheckout()'s promise
+        // pending forever after a successful payment, which is why the
+        // frontend stayed stuck on "Processing...". Now safeResolve is the
+        // ONLY place that sets handlerCalled.
         handler: async (response) => {
           console.log("[RazorpayLoader] Razorpay handler invoked", response);
-          // Guard against duplicate handler calls
-          if (handlerCalled) return;
-          handlerCalled = true;
+          console.log("Payment Success");
 
           try {
             if (config.onSuccess) {
               await config.onSuccess(response);
             }
             safeResolve(response);
+            console.log("Promise Resolved");
           } catch (err) {
             safeReject(err);
           }
@@ -184,10 +193,8 @@ export const openRazorpayCheckout = async (config) => {
 
         modal: {
           ondismiss: () => {
-            if (!dismissCalled) {
-              dismissCalled = true;
-              safeReject(new Error("Payment cancelled"));
-            }
+            console.log("Payment Cancelled");
+            safeReject(new Error("Payment cancelled"));
           },
         },
       };
@@ -249,17 +256,17 @@ export const openRazorpayCheckout = async (config) => {
 
       const rzp = new window.Razorpay(options);
 
+      // FIX: previously this guarded on `if (!handlerCalled)` and then set
+      // `handlerCalled = true` itself before calling safeReject — bypassing
+      // safeReject's own guard inconsistently. Now it just calls safeReject,
+      // which is idempotent and safe to call even if already settled.
       rzp.on("payment.failed", (response) => {
         console.error(
           "[RazorpayLoader] Razorpay payment.failed event:",
           response,
         );
-        if (!handlerCalled) {
-          handlerCalled = true;
-          safeReject(
-            new Error(response.error?.description || "Payment failed"),
-          );
-        }
+        console.log("Payment Failed");
+        safeReject(new Error(response.error?.description || "Payment failed"));
       });
 
       rzp.open();

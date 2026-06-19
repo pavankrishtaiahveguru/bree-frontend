@@ -730,41 +730,7 @@ const SubscriptionDetails = () => {
               </ul>
             </section>
 
-            {/* Manage Subscription */}
-            {!isCancelled && (
-              <section className="rounded-[28px] bg-white border border-bree-border p-6 shadow-sm">
-                <h2 className="text-base font-bold text-bree-text-primary uppercase tracking-wide mb-1">
-                  Manage Subscription
-                </h2>
-                <p className="text-xs text-bree-text-secondary mb-5">
-                  Changes take effect on your next renewal.
-                </p>
-                <div className="space-y-3">
-                  {isActive && (
-                    <Button
-                      variant="outline"
-                      className="w-full rounded-2xl border-amber-300 text-amber-700 hover:bg-amber-50 font-medium"
-                    >
-                      <Clock className="w-4 h-4 mr-2" />
-                      Pause Subscription
-                    </Button>
-                  )}
-                  {isPaused && (
-                    <Button className="w-full rounded-2xl bg-bree-primary text-white hover:bg-bree-primary/90 font-medium">
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                      Resume Subscription
-                    </Button>
-                  )}
-                  <Button
-                    variant="outline"
-                    className="w-full rounded-2xl border-red-200 text-red-600 hover:bg-red-50 font-medium"
-                  >
-                    <XCircle className="w-4 h-4 mr-2" />
-                    Cancel Subscription
-                  </Button>
-                </div>
-              </section>
-            )}
+            {/* Manage Subscription — already replaced by fixed version above */}
 
             {isCancelled && (
               <section className="rounded-[28px] bg-bree-bg border border-bree-border p-6">
