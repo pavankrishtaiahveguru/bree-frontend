@@ -8,7 +8,7 @@ import CartDrawer from "./CartDrawer";
 // const LOGO_URL =
   // "https://res.cloudinary.com/dxfs7qyzm/image/upload/v1779338649/Bree-logo_xgn0eh.png";
 const LOGO_URL =
-  "/images/logo.png";
+  "/images/logo.PNG";
 
 const navLinks = [
   { name: "Home", path: "/" },
