@@ -11,29 +11,41 @@ import CartUpdateModal from "@/components/CartUpdateModal";
 // ── Magic Checkout helpers ────────────────────────────────────────────────────
 
 /**
- * Build the line_items array for Razorpay Magic Checkout.
- * Razorpay documented shape per item:
- *   { type, sku, unit, name, description, image_url, amount, quantity }
- * amount = per-unit price in paise (integer).
+ * Build the line_items array for Razorpay Magic Checkout order creation.
+ * Per Razorpay's documented Orders API schema, mandatory fields per item are:
+ *   sku, variant_id, price, offer_price, quantity, name, description
+ * image_url is mandatory only if you want product images shown in checkout.
+ * price / offer_price are per-unit, in paise.
+ *
+ * NOTE: BREE's cart item currently has no distinct `variant_id`. Falling back
+ * to the product id. If BREE products have real variants (size/flavor/pack),
+ * replace `item.variant_id` below with the actual variant identifier —
+ * variant_id is MANDATORY per Razorpay's docs and this is a placeholder.
  */
 const buildLineItems = (cartItems) =>
-  cartItems.map((item) => ({
-    type: "e-commerce",
-    sku: String(item.id),
-    unit: "quantity",
-    name: item.name,
-    description: item.name,
-    image_url: item.image || "",
-    amount: Math.round(Number(item.price) * 100), // per-unit in paise
-    quantity: item.quantity,
-  }));
+  cartItems.map((item) => {
+    const unitPricePaise = Math.round(Number(item.price) * 100);
+    return {
+      sku: String(item.id),
+      variant_id: String(item.variant_id || item.id),
+      name: item.name,
+      description: item.name,
+      image_url: item.image || "",
+      price: unitPricePaise,
+      offer_price: unitPricePaise, // no per-item discount currently applied
+      quantity: item.quantity,
+    };
+  });
 
 /**
- * Sum of (amount × quantity) across all line_items, in paise.
- * Razorpay cross-validates this against the Razorpay order amount.
+ * Sum of (offer_price × quantity) across all line_items, in paise.
+ * This MUST be sent to the backend at order-creation time — Razorpay
+ * requires it on the actual Razorpay Order object (server-side) to treat
+ * the order as a Magic Checkout order. It is not a client-side checkout
+ * option.
  */
 const buildLineItemsTotal = (lineItems) =>
-  lineItems.reduce((sum, item) => sum + item.amount * item.quantity, 0);
+  lineItems.reduce((sum, item) => sum + item.offer_price * item.quantity, 0);
 
 // ── Loading phase labels shown to the user ────────────────────────────────────
 const LOADING_PHASE = {
@@ -146,14 +158,34 @@ const Checkout = () => {
       }
       if (acceptedChanges) setAcceptedChanges(false);
 
-      // ── STEP 1: Create Razorpay order on backend ─────────────────────────
-      // The backend requires customerName, email, mobileNumber, and
-      // shippingAddress at order-creation time (for the DB record).
-      // We pass the profile data fetched on mount as the pre-auth values.
-      // Razorpay Magic Checkout collects and confirms the final details
-      // (name, phone, email, shipping address) during the payment popup.
+      // ── STEP 1: Build + validate line items, then create Razorpay order ──
+      // line_items / line_items_total MUST be sent to the backend so it can
+      // include them in the actual Razorpay Orders API call — this is what
+      // makes Razorpay treat the order as a Magic Checkout order instead of
+      // silently falling back to Standard Checkout.
       setLoadingPhase("creating");
 
+      const lineItems = buildLineItems(cartItems);
+      const lineItemsTotal = buildLineItemsTotal(lineItems);
+
+      console.log("[Checkout] Computed line_items:", lineItems);
+      console.log("[Checkout] Computed line_items_total (paise):", lineItemsTotal);
+
+      if (!lineItems.length) {
+        toast.error("Your cart is empty.");
+        setLoadingPhase("idle");
+        return;
+      }
+      if (!(lineItemsTotal > 0)) {
+        toast.error("Unable to calculate order total. Please refresh and try again.");
+        setLoadingPhase("idle");
+        return;
+      }
+
+      // The backend also requires customerName, email, mobileNumber, and
+      // shippingAddress at order-creation time (for the DB record).
+      // Razorpay Magic Checkout collects and confirms the final details
+      // (name, phone, email, shipping address) during the payment popup.
       const createOrderPayload = {
         amount: cartTotal,
         currency: "INR",
@@ -163,6 +195,8 @@ const Checkout = () => {
           name: item.name,
           price: item.price,
         })),
+        line_items: lineItems,
+        line_items_total: lineItemsTotal,
         customerName: profile?.name || "Guest",
         email: profile?.email || "",
         mobileNumber: profile?.phone || "",
@@ -171,27 +205,13 @@ const Checkout = () => {
         shippingAddress: undefined,
       };
 
-      console.log("[Checkout] Creating order:", createOrderPayload);
+      console.log("[Checkout] Creating order — request payload:", createOrderPayload);
       const paymentResponse = await axios.post(
         "/api/payment/create-order",
         createOrderPayload,
       );
       const razorpayOrder = paymentResponse.data;
-
-      // FIX: required debug log to surface field mapping issues
-      console.log("Razorpay Response:", paymentResponse.data);
-      console.log(
-        "[DEBUG FULL RESPONSE]",
-        JSON.stringify(paymentResponse.data, null, 2),
-      );
-      console.log("[Checkout] Order created:", {
-        // FIX: backend returns order_id (not razorpay_order_id or id)
-        order_id: razorpayOrder.order_id,
-        // FIX: backend returns key_id (not key)
-        key_id: razorpayOrder.key_id,
-        order_db_id: razorpayOrder.order_db_id,
-        amount: razorpayOrder.amount,
-      });
+      console.log("[Checkout] Creating order — response:", razorpayOrder);
 
       // ── STEP 2: Load Razorpay SDK ─────────────────────────────────────────
       setLoadingPhase("opening");
@@ -205,30 +225,18 @@ const Checkout = () => {
       }
 
       // ── STEP 3: Build Magic Checkout options ──────────────────────────────
-      const lineItems = buildLineItems(cartItems);
-      const lineItemsTotal = buildLineItemsTotal(lineItems);
-
-      const apiBaseUrl =
-        process.env.REACT_APP_BACKEND_URL || "http://localhost:4000";
-
       const checkoutOptions = {
         // Razorpay core fields
-        // FIX: pass key_id (not key) so razorpayLoader.js can read config.key_id correctly.
-        // razorpayLoader also accepts config.key as a fallback, but key_id is the
-        // canonical field name matching the backend response shape.
-        key_id: razorpayOrder.key_id,
-
+        key: razorpayOrder.key_id,
         amount: razorpayOrder.amount,
-
         currency: razorpayOrder.currency || "INR",
-
         name: "BREE Wellness",
-
         description: "Order Payment",
-
-        // FIX: backend returns order_id — do NOT fall back to .razorpay_order_id or .id
-        // as those fields do not exist in this backend's response shape.
         order_id: razorpayOrder.order_id,
+
+        // Magic Checkout — these MUST be top-level, not nested.
+        one_click_checkout: true,
+        show_coupons: true,
 
         // User prefill
         prefill: {
@@ -236,14 +244,6 @@ const Checkout = () => {
           email: profile?.email || "",
           contact: profile?.phone || "",
         },
-
-        // Magic Checkout
-        integration: "magic_checkout",
-
-        // Product line items
-        line_items: lineItems,
-
-        line_items_total: lineItemsTotal,
 
         // Payment methods
         method: {
@@ -255,45 +255,12 @@ const Checkout = () => {
           cod: false,
         },
 
-        // Commerce APIs
-        checkout: {
-          one_click_checkout: true,
-          show_coupons: true,
-
-          shipping_info: {
-            url: `${apiBaseUrl}/api/payment/shipping-info`,
-            method: "POST",
-            body: {
-              items: cartItems.map((item) => ({
-                product_id: item.id,
-                quantity: item.quantity,
-                price: item.price,
-              })),
-            },
-          },
-
-          promotions: {
-            url: `${apiBaseUrl}/api/payment/promotions`,
-            method: "POST",
-            body: {
-              items: cartItems.map((item) => ({
-                product_id: item.id,
-                quantity: item.quantity,
-                price: item.price,
-              })),
-              email: profile?.email || "",
-              amount: cartTotal,
-            },
-          },
-        },
-
         theme: {
           color: "#84A95A",
         },
 
         retry: {
           enabled: true,
-          max_count: 3,
         },
 
         timeout: 900,
@@ -305,8 +272,14 @@ const Checkout = () => {
           },
         },
 
-        // Success callback
-        onSuccess: async (response) => {
+        // Success callback — Razorpay's documented option key is `handler`,
+        // not `onSuccess`. NOTE: this callback's `response` object only
+        // contains razorpay_payment_id / razorpay_order_id / razorpay_signature
+        // per Razorpay's docs — name/email/contact/address are NOT part of it.
+        // Left as-is per instruction to keep verification flow intact; the
+        // backend should independently fetch authoritative customer_details
+        // via Razorpay's Fetch Order API after verification.
+        handler: async (response) => {
           console.log("[Checkout] Payment success:", response);
 
           setLoadingPhase("verifying");
@@ -343,9 +316,8 @@ const Checkout = () => {
 
             const savedOrderId = verifyResponse.data.order_id;
 
-            console.log("Verify Response:", verifyResponse.data);
-            console.log("Saved Order ID:", savedOrderId);
-            console.log("Navigating to success page...");
+            console.log("[Checkout] Saved Order ID:", savedOrderId);
+            console.log("[Checkout] Navigating to success page...");
 
             navigate(`/checkout/success?orderId=${savedOrderId}`, {
               replace: true,
@@ -367,17 +339,17 @@ const Checkout = () => {
       };
 
       // ── STEP 4: Validate + open Razorpay Magic Checkout ───────────────────
-      // FIX: log the exact fields that Razorpay SDK will receive before opening
-      console.log("Checkout Options:", {
-        key: checkoutOptions.key_id,
+      console.log("[Checkout] Razorpay options before opening:", {
+        key: checkoutOptions.key,
         order_id: checkoutOptions.order_id,
         amount: checkoutOptions.amount,
+        one_click_checkout: checkoutOptions.one_click_checkout,
       });
 
-      // FIX: hard-fail fast with a clear message rather than letting the SDK
+      // Hard-fail fast with a clear message rather than letting the SDK
       // open with undefined key/order_id (which produces the cryptic
-      // "Authentication key was missing during initialization" error)
-      if (!checkoutOptions.key_id) {
+      // "Authentication key was missing during initialization" error).
+      if (!checkoutOptions.key) {
         throw new Error("Razorpay key missing");
       }
       if (!checkoutOptions.order_id) {

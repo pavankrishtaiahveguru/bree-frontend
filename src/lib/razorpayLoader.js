@@ -93,11 +93,19 @@ export const loadRazorpayScript = () => {
  *
  * Supports both one-time payment (order_id) and subscription (subscription_id).
  * All Magic Checkout fields are forwarded to new window.Razorpay() when present:
- *   - integration        → activates Magic Checkout mode
- *   - checkout           → one_click_checkout, show_coupons, shipping_info, promotions
+ *   - one_click_checkout → activates Magic Checkout mode (mandatory boolean
+ *                          per Razorpay's docs — without this being forwarded,
+ *                          the SDK silently falls back to Standard Checkout)
+ *   - show_coupons       → shows/hides the coupon widget inside Magic Checkout
+ *   - integration        → legacy/unused field, kept for backward compatibility
+ *   - checkout           → legacy nested block (one_click_checkout/show_coupons),
+ *                          kept for backward compatibility; current Checkout.js
+ *                          sends these as top-level fields instead
  *   - method             → payment method overrides (disable COD etc.)
  *   - line_items         → order line items displayed inside Razorpay modal
  *   - line_items_total   → pre-computed total in paise for line_items validation
+ *   - retry              → retry behaviour on the checkout form
+ *   - timeout            → checkout session timeout in seconds
  *   - subscription_id    → Razorpay subscription ID (subscription flow only)
  *
  * Fields are forwarded only when present in config (undefined values are omitted
@@ -115,13 +123,18 @@ export const loadRazorpayScript = () => {
  * @param {string}   [config.image]
  * @param {Object}   [config.prefill]             – { name, email, contact }
  * @param {string}   [config.callback_url]
- * @param {string}   [config.integration]         – "magic_checkout" to activate
- * @param {Object}   [config.checkout]            – Magic Checkout options block
+ * @param {boolean}  [config.one_click_checkout]  – true activates Magic Checkout
+ * @param {boolean}  [config.show_coupons]        – shows coupon widget in Magic Checkout
+ * @param {string}   [config.integration]         – legacy, unused by current Checkout.js
+ * @param {Object}   [config.checkout]            – legacy nested Magic Checkout options block
  * @param {Object}   [config.method]              – payment method overrides
  * @param {Array}    [config.line_items]          – order line items for modal display
  * @param {number}   [config.line_items_total]    – total in paise matching line_items
+ * @param {Object}   [config.retry]
+ * @param {number}   [config.timeout]
  * @param {Object}   [config.theme]
  * @param {Function} [config.onSuccess]           – callback(response) on payment success
+ * @param {Function} [config.handler]             – callback(response) on payment success
  * @returns {Promise<Object>} Resolves with Razorpay payment response
  */
 export const openRazorpayCheckout = async (config) => {
@@ -184,6 +197,9 @@ export const openRazorpayCheckout = async (config) => {
             if (config.onSuccess) {
               await config.onSuccess(response);
             }
+            if (config.handler) {
+              await config.handler(response);
+            }
             safeResolve(response);
             console.log("Promise Resolved");
           } catch (err) {
@@ -217,16 +233,34 @@ export const openRazorpayCheckout = async (config) => {
         options.callback_url = config.callback_url;
       }
 
-      // ── Magic Checkout fields (forwarded only when caller provides them) ──
+      // ── Magic Checkout activation flags ───────────────────────────────────
+      // CRITICAL FIX: one_click_checkout is the field that actually switches
+      // Razorpay between Magic Checkout and Standard Checkout, per Razorpay's
+      // docs ("mandatory boolean ... initiate Magic Checkout or Standard
+      // Checkout"). This was previously never forwarded here — Checkout.js
+      // was setting it correctly, but it silently never reached
+      // new window.Razorpay(), causing Standard Checkout to load instead
+      // and skip address/contact collection entirely.
+      if (config.one_click_checkout !== undefined) {
+        options.one_click_checkout = config.one_click_checkout;
+      }
+
+      if (config.show_coupons !== undefined) {
+        options.show_coupons = config.show_coupons;
+      }
+
+      // ── Legacy fields (kept for backward compatibility, currently unused
+      //    by Checkout.js, which sends one_click_checkout/show_coupons as
+      //    top-level fields instead) ───────────────────────────────────────
       //
-      // integration: "magic_checkout" activates Magic Checkout mode.
-      // Without this the SDK falls back to standard checkout.
+      // integration: not a documented Razorpay option; harmless if forwarded.
       if (config.integration) {
         options.integration = config.integration;
       }
 
-      // checkout: one_click_checkout, show_coupons, shipping_info, promotions.
-      // These are the primary Magic Checkout configuration options.
+      // checkout: legacy nested block. If a caller still sends this shape,
+      // forward it — but note it is NOT how Razorpay's documented client API
+      // works; one_click_checkout/show_coupons above are the real mechanism.
       if (config.checkout) {
         options.checkout = config.checkout;
       }
@@ -237,16 +271,24 @@ export const openRazorpayCheckout = async (config) => {
       }
 
       // line_items: order line items displayed inside the Razorpay modal.
-      // Each item: { type, sku, unit, name, description, image_url, amount, quantity }
-      // amount is per-unit in paise.
       if (config.line_items && config.line_items.length > 0) {
         options.line_items = config.line_items;
       }
 
-      // line_items_total: sum of (item.amount * item.quantity) across all
-      // line_items, in paise. Razorpay validates this against the order amount.
+      // line_items_total: sum of (item.offer_price * item.quantity) across
+      // all line_items, in paise.
       if (config.line_items_total !== undefined) {
         options.line_items_total = config.line_items_total;
+      }
+
+      // FIX: retry/timeout were silently dropped — not the cause of the
+      // Magic Checkout activation bug, but fixed for a faithful pass-through.
+      if (config.retry) {
+        options.retry = config.retry;
+      }
+
+      if (config.timeout !== undefined) {
+        options.timeout = config.timeout;
       }
 
       console.log(

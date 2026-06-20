@@ -143,7 +143,19 @@ const CheckoutSuccess = () => {
               <div className="mt-10 bg-bree-bg rounded-2xl p-5">
                 <h3 className="font-bold mb-4">Shipping Address</h3>
 
-                {orderDetails?.shipping_address ? (
+                {/* FIX (audit Section 2 / Fix 3): backend stores
+                  shipping_address as a single comma-joined string (see
+                  formatRazorpayShippingAddress in paymentController.js), not
+                  an object — render it as-is instead of reading
+                  non-existent .name/.phone/.address_line_1 fields, which
+                  previously rendered blank. */}
+                {typeof orderDetails?.shipping_address === "string" &&
+                orderDetails.shipping_address.trim() ? (
+                  <p className="whitespace-pre-line">
+                    {orderDetails.shipping_address}
+                  </p>
+                ) : orderDetails?.shipping_address &&
+                  typeof orderDetails.shipping_address === "object" ? (
                   <>
                     <p>{orderDetails.shipping_address.name}</p>
                     <p>{orderDetails.shipping_address.phone}</p>
