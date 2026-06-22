@@ -15,21 +15,26 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 // getDisplayStatus
 // ─────────────────────────────────────────────────────────────────────────────
-// Razorpay keeps subscription_status = "active" until the current billing
-// cycle ends, even after the customer or admin has requested cancellation.
-// Our backend sets order_status = "cancelled" immediately when a cancel is
-// triggered (via cancelSubscription with cancel_at_cycle_end = 1), so we
-// cross-check both fields to derive the true display state.
+// The backend now stores subscription_status = 'cancellation_requested'
+// directly when a cancel is triggered with cancel_at_cycle_end=1.
 //
 // Rules (in priority order):
-//   1. subscription_status = "active"  AND order_status = "cancelled"
-//      → "cancellation_requested"  (still running, won't renew)
-//   2. everything else → pass subscription_status through unchanged
+//   1. subscription_status = "cancellation_requested"
+//      → "cancellation_requested"  (primary path — backend sets this directly)
+//   2. subscription_status = "active"  AND order_status = "cancelled"
+//      → "cancellation_requested"  (legacy fallback for pre-fix DB rows)
+//   3. everything else → pass subscription_status through unchanged
 // ─────────────────────────────────────────────────────────────────────────────
 const getDisplayStatus = (subscriptionStatus, orderStatus) => {
   const sub = (subscriptionStatus || "").toLowerCase();
   const ord = (orderStatus || "").toLowerCase();
 
+  // Primary: subscription_status is already set correctly by the backend
+  if (sub === "cancellation_requested") {
+    return "cancellation_requested";
+  }
+
+  // Legacy fallback: pre-fix rows where order_status was set to 'cancelled'
   if (sub === "active" && ord === "cancelled") {
     return "cancellation_requested";
   }
@@ -774,7 +779,8 @@ const AdminSubscriptionDetails = () => {
                   <p className="text-sm font-semibold text-bree-text-primary">
                     {subscription.cancelReason
                       ? subscription.cancelReason
-                      : subscription.orderStatus === "cancelled"
+                      : displayStatus === "cancelled" ||
+                          displayStatus === "cancellation_requested"
                         ? "Customer Requested Cancellation"
                         : "-"}
                   </p>

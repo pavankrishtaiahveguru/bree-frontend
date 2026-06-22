@@ -58,19 +58,20 @@ const statusBadgeStyles = {
 };
 
 // ── getDisplayStatus ────────────────────────────────────────────────────────
-// Derives the correct display status from both subscription_status and
-// order_status. The backend may return fields in either snake_case
-// (subscription_status, order_status) or camelCase (subscriptionStatus,
-// orderStatus) depending on which service/version is responding — we handle
-// both.
+// Derives the correct display status from subscription_status (and order_status
+// as a legacy fallback for data already in the DB before Phase 1 fix).
+//
+// The backend now stores subscription_status = 'cancellation_requested'
+// directly when a cancel is triggered with cancel_at_cycle_end=1. We check
+// that field first (primary path). The order_status cross-check is kept as a
+// fallback for any rows written before the Phase 1 fix was deployed.
 //
 // States in priority order:
-//   cancellation_requested → subscription still active on Razorpay but the
-//     user/admin has already triggered cancellation with cancel_at_cycle_end=1.
-//     Razorpay won't flip subscription_status to "cancelled" until the billing
-//     cycle ends; the webhook does that. Until then we read order_status to
-//     know the user's intent.
-//   everything else → pass subscription_status through unchanged.
+//   1. subscription_status = "cancellation_requested"
+//      → "cancellation_requested" (primary path — backend sets this directly)
+//   2. subscription_status = "active" AND order_status = "cancelled"
+//      → "cancellation_requested" (legacy fallback for pre-fix DB rows)
+//   3. everything else → pass subscription_status through unchanged.
 const getDisplayStatus = (subscription) => {
   const subscriptionStatus = (
     subscription.subscriptionStatus ||
@@ -85,6 +86,12 @@ const getDisplayStatus = (subscription) => {
     ""
   ).toLowerCase();
 
+  // Primary: subscription_status is already set correctly by the backend
+  if (subscriptionStatus === "cancellation_requested") {
+    return "cancellation_requested";
+  }
+
+  // Legacy fallback: pre-fix rows where order_status was set to 'cancelled'
   if (subscriptionStatus === "active" && orderStatus === "cancelled") {
     return "cancellation_requested";
   }
