@@ -59,6 +59,13 @@ const formatAmount = (amount) => {
 
 function StatusBadge({ status }) {
   const s = (status || "").toLowerCase();
+  if (s === "cancellation_requested")
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-widest bg-red-50 text-red-600 border border-red-200">
+        <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+        Cancelled
+      </span>
+    );
   if (s === "active" || s === "created")
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-widest bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -256,9 +263,14 @@ const SubscriptionDetails = () => {
 
   /* derived state */
   const rawStatus = (subscription?.subscription_status || "").toLowerCase();
-  const isActive = rawStatus === "active" || rawStatus === "created";
-  const isPaused = rawStatus === "paused" || rawStatus === "pending";
-  const isCancelled = !isActive && !isPaused;
+  const isCancellationRequested = rawStatus === "cancellation_requested";
+  const isActive =
+    !isCancellationRequested &&
+    (rawStatus === "active" || rawStatus === "created");
+  const isPaused =
+    !isCancellationRequested &&
+    (rawStatus === "paused" || rawStatus === "pending");
+  const isCancelled = !isActive && !isPaused && !isCancellationRequested;
 
   const totalRenewals = historyItems.filter(
     (e) =>
@@ -536,7 +548,10 @@ const SubscriptionDetails = () => {
                     subscription.razorpay_subscription_id || subscription.id
                   }
                 />
-                <CopyField label="Order ID" value={subscription.order_id} />
+                <CopyField
+                  label="Order Number"
+                  value={subscription.order_number || subscription.order_id}
+                />
                 {subscription.plan_id && (
                   <CopyField label="Plan ID" value={subscription.plan_id} />
                 )}
@@ -675,7 +690,14 @@ const SubscriptionDetails = () => {
                 {[
                   {
                     label: "Status",
-                    value: subscription.subscription_status || "Active",
+                    value:
+                      rawStatus === "cancellation_requested"
+                        ? "Cancelled"
+                        : isActive
+                          ? "Active"
+                          : isPaused
+                            ? "Paused"
+                            : "Cancelled",
                     highlight: isActive,
                   },
                   {

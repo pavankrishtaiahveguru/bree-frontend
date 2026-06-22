@@ -104,7 +104,7 @@ const statusLabel = (displayStatus) => {
     past_due: "Payment Failed",
     expired: "Expired",
     pending: "Pending",
-    cancellation_requested: "Cancellation Requested",
+    cancellation_requested: "Cancelled",
   };
   return labels[displayStatus] ?? displayStatus;
 };
@@ -400,18 +400,28 @@ const AdminSubscriptions = () => {
             className="h-11 rounded-2xl border-bree-border bg-white"
           />
           <div className="grid grid-cols-2 gap-3">
-            <Input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="h-11 rounded-2xl border-bree-border bg-white"
-            />
-            <Input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="h-11 rounded-2xl border-bree-border bg-white"
-            />
+            <div>
+              <label className="text-xs font-semibold text-bree-text-secondary uppercase tracking-[0.16em] mb-1.5 block">
+                Start Date
+              </label>
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="h-11 rounded-2xl border-bree-border bg-white"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-bree-text-secondary uppercase tracking-[0.16em] mb-1.5 block">
+                End Date
+              </label>
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="h-11 rounded-2xl border-bree-border bg-white"
+              />
+            </div>
           </div>
         </div>
 
@@ -420,7 +430,7 @@ const AdminSubscriptions = () => {
             <thead className="bg-bree-bg/60">
               <tr>
                 {[
-                  "Subscription ID",
+                  "Order No",
                   "Customer",
                   "Email",
                   "Phone",
@@ -484,7 +494,7 @@ const AdminSubscriptions = () => {
                       className="border-t border-bree-border hover:bg-bree-bg/40 transition-colors"
                     >
                       <td className="px-4 py-4 text-sm font-medium text-bree-primary">
-                        {subscription.id}
+                        {subscription.orderNumber || "-"}
                       </td>
                       <td className="px-4 py-4 text-sm text-bree-text-primary">
                         {subscription.customerName}

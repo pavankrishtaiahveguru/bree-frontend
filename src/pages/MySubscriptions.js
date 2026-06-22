@@ -81,7 +81,7 @@ function StatusBadge({ subscription }) {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider bg-red-50 text-red-600 border border-red-200">
         <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-        Cancellation Requested
+        Cancelled
       </span>
     );
 
@@ -117,7 +117,7 @@ function StatusChip({ subscription }) {
   if (cancelRequested)
     return (
       <span className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider border bg-red-400/20 text-white border-red-300/30">
-        Cancellation Requested
+        Cancelled
       </span>
     );
 
@@ -249,7 +249,7 @@ function SubscriptionCard({
             <div className="flex items-center gap-2 text-red-600">
               <AlertTriangle className="w-4 h-4 shrink-0" />
               <span className="text-xs font-bold uppercase tracking-wide">
-                Cancellation Requested
+                Cancelled
               </span>
             </div>
             <p className="text-xs text-red-700 leading-relaxed">
@@ -498,7 +498,7 @@ const MySubscriptions = () => {
       // component that still uses the string label (e.g. sidebar chips).
       // Driven entirely by subscription_status — no order_status checks.
       statusLabel: isCancellationRequested(subscription)
-        ? "Cancellation Requested"
+        ? "Cancelled"
         : subscription.subscription_status === "paused"
           ? "Paused"
           : subscription.subscription_status === "cancelled"
@@ -578,7 +578,13 @@ const MySubscriptions = () => {
             <SummaryCard
               icon={<Sparkles className="w-4 h-4" />}
               label="Membership"
-              value="Active"
+              value={
+                activePlans > 0
+                  ? "Active"
+                  : normalizedSubscriptions.some(isCancellationRequested)
+                    ? "Cancellation Pending"
+                    : "Inactive"
+              }
               sub="BREE Wellness Club"
             />
             <SummaryCard
@@ -686,7 +692,8 @@ const MySubscriptions = () => {
                       (s) =>
                         s.next_billing_date &&
                         (s.subscription_status || "").toLowerCase() !==
-                          "cancelled",
+                          "cancelled" &&
+                        !isCancellationRequested(s),
                     )
                     .slice(0, 3)
                     .map((s) => (

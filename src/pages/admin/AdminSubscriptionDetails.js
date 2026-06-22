@@ -70,7 +70,7 @@ const STATUS_CONFIG = {
   // admins are never misled into thinking the subscription will auto-renew.
   cancellation_requested: {
     classes: "bg-red-100 text-red-700 border-red-200",
-    label: "Cancellation Requested",
+    label: "Cancelled",
   },
 };
 
@@ -481,8 +481,7 @@ const AdminSubscriptionDetails = () => {
                   ["Name", subscription.customerName],
                   ["Email", subscription.email],
                   ["Phone", subscription.phone],
-                  // Req 2: show the order UUID directly — always present
-                  ["Linked Order", subscription.id],
+                  ["Linked Order", subscription.orderNumber || subscription.id],
                 ].map(([label, value]) => (
                   <div key={label}>
                     <p className="text-xs text-bree-text-secondary uppercase tracking-[0.18em] mb-2">
@@ -588,7 +587,7 @@ const AdminSubscriptionDetails = () => {
                       {[
                         "Payment Date",
                         "Amount",
-                        "Order ID",
+                        "Order Number",
                         "Payment ID",
                         "Status",
                       ].map((heading) => (
@@ -617,8 +616,8 @@ const AdminSubscriptionDetails = () => {
                               "en-IN",
                             )}
                           </td>
-                          <td className="px-4 py-3 text-sm text-bree-text-primary font-mono text-xs">
-                            {payment.order_id}
+                          <td className="px-4 py-3 text-sm text-bree-text-primary font-medium text-xs">
+                            {payment.order_number || payment.order_id || "-"}
                           </td>
                           <td className="px-4 py-3 text-sm text-bree-text-secondary font-mono text-xs whitespace-nowrap">
                             {payment.razorpay_payment_id ? (
@@ -670,7 +669,7 @@ const AdminSubscriptionDetails = () => {
                   <thead className="bg-bree-bg/60">
                     <tr>
                       {[
-                        "Order ID",
+                        "Order Number",
                         "Renewal Date",
                         "Amount",
                         "Order Status",
@@ -692,8 +691,10 @@ const AdminSubscriptionDetails = () => {
                           key={order.id}
                           className="border-t border-bree-border hover:bg-bree-bg/50 transition-colors"
                         >
-                          <td className="px-4 py-3 text-sm font-medium text-bree-text-primary font-mono text-xs">
-                            {order.id}
+                          <td className="px-4 py-3 text-sm font-medium text-bree-text-primary text-xs">
+                            {order.orderNumber ||
+                              order.order_number ||
+                              order.id}
                           </td>
                           <td className="px-4 py-3 text-sm text-bree-text-secondary whitespace-nowrap">
                             {formatDateTime(order.created_at)}

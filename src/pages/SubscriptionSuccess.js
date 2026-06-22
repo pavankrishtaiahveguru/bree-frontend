@@ -466,7 +466,7 @@ const SubscriptionSuccess = () => {
           </Button>
           <Button
             type="button"
-            onClick={() => navigate("/profile")}
+            onClick={() => navigate("/profile?tab=orders")}
             variant="outline"
             className="flex-1 py-4 rounded-full border-bree-border font-medium sm:flex-none"
           >
