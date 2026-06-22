@@ -106,7 +106,7 @@ const OrderRow = ({ order, delay }) => {
       className="border-b border-bree-border last:border-0 hover:bg-bree-bg/50 transition-colors"
     >
       <td className="py-3 px-4 text-sm font-medium text-bree-primary">
-        #{order.order_id || order.id}
+        #{order.order_number || order.id}
       </td>
       <td className="py-3 px-4 text-sm text-bree-text-primary">
         {order.customer_name}

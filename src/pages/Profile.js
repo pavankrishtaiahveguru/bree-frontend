@@ -652,7 +652,7 @@ function OrdersTab() {
                 Order
               </span>
               <p className="font-outfit font-semibold text-bree-text-primary">
-                #{order.id?.slice(-8) || order.id}
+                #{order.order_number || order.id?.slice(-8) || order.id}
               </p>
             </div>
             <div className="flex flex-col items-end gap-2">

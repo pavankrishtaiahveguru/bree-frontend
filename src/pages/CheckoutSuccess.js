@@ -92,6 +92,11 @@ const CheckoutSuccess = () => {
                   <CheckCircle className="w-14 h-14 text-green-600" />
                 </div>
                 <h1 className="text-4xl font-bold mt-6">Order Confirmed</h1>
+                {orderDetails?.order_number && (
+                  <p className="text-bree-text-primary font-outfit font-semibold mt-2">
+                    Order #{orderDetails.order_number}
+                  </p>
+                )}
                 <p className="text-bree-text-secondary mt-3">
                   Thank you for purchasing BREE Wellness.
                 </p>
@@ -101,7 +106,15 @@ const CheckoutSuccess = () => {
               <div className="mt-10 grid md:grid-cols-2 gap-6">
                 <div className="bg-bree-bg rounded-2xl p-5">
                   <h3 className="font-bold mb-4">Payment Details</h3>
-                  <Info label="Order ID" value={orderDetails?.id} />
+                  {/* FIX (Order Number feature): customer-facing UI must never
+                      show the internal UUID — show order_number instead. If
+                      an older order somehow has no order_number yet (e.g.
+                      backfill hasn't run), fall back to a clear placeholder
+                      rather than leaking the UUID. */}
+                  <Info
+                    label="Order Number"
+                    value={orderDetails?.order_number || "—"}
+                  />
                   <Info
                     label="Transaction ID"
                     value={orderDetails?.razorpay_payment_id}

@@ -23,9 +23,9 @@ const OrderTrackingCard = ({ order }) => {
     <div className="bg-white rounded-2xl p-6 shadow-premium border border-bree-border">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs text-bree-text-secondary">Order ID</p>
+          <p className="text-xs text-bree-text-secondary">Order Number</p>
           <h3 className="font-outfit text-lg font-semibold text-bree-text-primary">
-            #{order.id}
+            #{order.order_number || order.id}
           </h3>
           <p className="text-sm text-bree-text-secondary mt-1">
             {orderDateString || "Date unavailable"}

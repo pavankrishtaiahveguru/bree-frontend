@@ -173,7 +173,10 @@ const OrderTracking = () => {
   return (
     <div className="pt-24 pb-12 min-h-screen bg-bree-bg">
       <Helmet>
-        <title>Track Order #{order.id} — BREE</title>
+        <title>
+          Track Order #{order.order_number || order.id?.slice(-8) || order.id} —
+          BREE
+        </title>
       </Helmet>
 
       <div className="max-w-5xl mx-auto px-6 md:px-12">

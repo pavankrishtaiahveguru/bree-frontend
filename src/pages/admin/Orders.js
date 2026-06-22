@@ -12,6 +12,7 @@ import {
   RefreshCw,
   ChevronDown,
   SlidersHorizontal,
+  MapPin,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -26,9 +27,7 @@ const PAGE_SIZE = 10;
 
 const normalizeStatus = (status) => {
   if (!status) return "pending";
-
   const lower = String(status).toLowerCase();
-
   if (
     [
       "pending",
@@ -41,11 +40,7 @@ const normalizeStatus = (status) => {
   ) {
     return lower;
   }
-
-  if (["shipped", "out_for_delivery"].includes(lower)) {
-    return "dispatched";
-  }
-
+  if (["shipped", "out_for_delivery"].includes(lower)) return "dispatched";
   return lower;
 };
 
@@ -83,10 +78,15 @@ const ORDER_TRANSITIONS = {
   cancelled: ["cancelled"],
 };
 
+const PAYMENT_COLORS = {
+  paid: "bg-green-100 text-green-700",
+  pending: "bg-yellow-100 text-yellow-700",
+  failed: "bg-red-100 text-red-500",
+};
+
 const getCommonBulkStatuses = (orders, selectedIds) => {
   const selectedOrders = orders.filter((o) => selectedIds.includes(o.id));
   if (!selectedOrders.length) return ORDER_STATUSES;
-
   const intersection = selectedOrders
     .map(
       (o) =>
@@ -97,33 +97,23 @@ const getCommonBulkStatuses = (orders, selectedIds) => {
         ),
     )
     .reduce(
-      (common, statusSet) => {
-        return new Set([...common].filter((status) => statusSet.has(status)));
-      },
+      (common, statusSet) =>
+        new Set([...common].filter((s) => statusSet.has(s))),
       new Set(
         ORDER_TRANSITIONS[normalizeStatus(selectedOrders[0].order_status)] || [
           normalizeStatus(selectedOrders[0].order_status),
         ],
       ),
     );
-
   return [...intersection].length ? [...intersection] : ORDER_STATUSES;
 };
 
-const PAYMENT_COLORS = {
-  paid: "bg-green-100  text-green-700",
-  pending: "bg-yellow-100 text-yellow-700",
-  failed: "bg-red-100    text-red-500",
-};
-
-/* ── date filter helper ───────────────────────────────────────────────────── */
-// FIX 6: clamp both bounds correctly so "today" captures all timestamps within the day
+/* ── date filter helper ─────────────────────────────────────────────────── */
 function isInRange(dateStr, range) {
   if (range === "all") return true;
   const date = new Date(dateStr);
   const start = new Date();
   const end = new Date();
-
   if (range === "today") {
     start.setHours(0, 0, 0, 0);
     end.setHours(23, 59, 59, 999);
@@ -137,11 +127,25 @@ function isInRange(dateStr, range) {
     start.setDate(start.getDate() - 90);
     start.setHours(0, 0, 0, 0);
   }
-
   return date >= start && date <= end;
 }
 
-/* ── small reusable dropdown ──────────────────────────────────────────────── */
+/* ── helpers ────────────────────────────────────────────────────────────── */
+/**
+ * Derive a display-friendly, comma-separated product name string from an order.
+ * Prefers the pre-built `product_names` field from the new backend; falls back
+ * gracefully to the items array or the legacy single `product_name` field.
+ */
+const getProductNames = (order) => {
+  if (order.product_names) return order.product_names;
+  const items = Array.isArray(order.items) ? order.items : [];
+  if (items.length) {
+    return items.map((i) => i.product_name || i.name || "Unknown").join(", ");
+  }
+  return order.product_name || "Unknown";
+};
+
+/* ── small reusable dropdown ─────────────────────────────────────────────── */
 function FilterDropdown({ label, value, options, onChange, colorMap }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -208,7 +212,7 @@ function FilterDropdown({ label, value, options, onChange, colorMap }) {
                           : opt.value === "confirmed"
                             ? "bg-sky-500"
                             : opt.value === "dispatched"
-                              ? "bg-purple-700 text-purple-700"
+                              ? "bg-purple-700"
                               : opt.value === "cancelled"
                                 ? "bg-red-500"
                                 : "bg-slate-300"
@@ -228,18 +232,15 @@ function FilterDropdown({ label, value, options, onChange, colorMap }) {
   );
 }
 
-/* ── order-detail modal ───────────────────────────────────────────────────── */
-// FIX 1: Removed AnimatePresence from inside the modal — it belongs at the call site.
-// FIX 7: key={order.id} added at call site so switching orders re-mounts cleanly.
+/* ── order-detail modal ──────────────────────────────────────────────────── */
 const OrderModal = ({ order, onClose, onStatusChange }) => {
   if (!order) return null;
 
   const orderStatus = normalizeStatus(order.order_status || order.status);
+  const items = Array.isArray(order.items) ? order.items : [];
+
   const timeline = [
-    {
-      label: "Order Placed",
-      done: true,
-    },
+    { label: "Order Placed", done: true },
     {
       label: "Confirmed",
       done: ["confirmed", "processing", "dispatched", "delivered"].includes(
@@ -254,10 +255,7 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
       label: "Dispatched",
       done: ["dispatched", "delivered"].includes(orderStatus),
     },
-    {
-      label: "Delivered",
-      done: orderStatus === "delivered",
-    },
+    { label: "Delivered", done: orderStatus === "delivered" },
   ];
 
   return (
@@ -275,10 +273,11 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
         onClick={(e) => e.stopPropagation()}
         className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
       >
+        {/* Header */}
         <div className="px-6 py-5 border-b border-bree-border flex items-center justify-between sticky top-0 bg-white z-10 rounded-t-3xl">
           <div>
             <h3 className="font-outfit font-semibold text-bree-text-primary text-lg">
-              Order #{order.id}
+              Order #{order.order_number || order.id}
             </h3>
             <p className="text-bree-text-secondary text-xs mt-0.5">
               {new Date(order.created_at).toLocaleString("en-IN", {
@@ -297,6 +296,7 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
         </div>
 
         <div className="p-6 space-y-6">
+          {/* Customer info */}
           <div className="grid grid-cols-2 gap-4">
             {[
               ["Customer", order.customer_name],
@@ -306,49 +306,105 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
             ].map(([label, value]) => (
               <div key={label}>
                 <p className="text-xs text-bree-text-secondary mb-1">{label}</p>
-                <p className="text-sm font-medium text-bree-text-primary">
-                  {value}
+                <p className="text-sm font-medium text-bree-text-primary break-all">
+                  {value || "—"}
                 </p>
               </div>
             ))}
           </div>
 
+          {/* ── Order Items ── */}
           <div className="p-4 bg-bree-bg rounded-2xl">
-            <p className="text-xs text-bree-text-secondary mb-3 font-medium uppercase tracking-wide">
-              Product Details
-            </p>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-bree-text-primary text-sm">
-                  {order.product_name ||
-                    order.items?.[0]?.name ||
-                    "Unknown product"}
-                </p>
-                <p className="text-bree-text-secondary text-xs mt-0.5">
-                  Qty: {order.quantity ?? order.items?.[0]?.quantity ?? "—"}
-                </p>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs text-bree-text-secondary font-medium uppercase tracking-wide">
+                Order Items
+              </p>
+              <span
+                className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${
+                  PAYMENT_COLORS[order.payment_status] ||
+                  "bg-gray-100 text-gray-600"
+                }`}
+              >
+                {order.payment_status}
+              </span>
+            </div>
+
+            {items.length > 0 ? (
+              <div className="space-y-3">
+                {items.map((item, idx) => {
+                  const name =
+                    item.product_name || item.name || "Unknown product";
+                  const qty = item.quantity ?? 1;
+                  const unitPrice = Number(item.unit_price ?? item.price ?? 0);
+                  const totalPrice = Number(
+                    item.total_price ?? unitPrice * qty,
+                  );
+                  return (
+                    <div
+                      key={item.id ?? idx}
+                      className={`flex items-start justify-between gap-3 ${
+                        idx < items.length - 1
+                          ? "pb-3 border-b border-bree-border/60"
+                          : ""
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-bree-text-primary text-sm leading-snug">
+                          {name}
+                        </p>
+                        <p className="text-bree-text-secondary text-xs mt-0.5">
+                          Qty: {qty}
+                          {unitPrice > 0 && (
+                            <span className="ml-2 text-bree-text-secondary/70">
+                              × ₹{unitPrice.toLocaleString()}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      <p className="font-semibold text-bree-text-primary text-sm whitespace-nowrap">
+                        ₹{totalPrice.toLocaleString()}
+                      </p>
+                    </div>
+                  );
+                })}
+
+                {/* Order total */}
+                <div className="pt-2 flex items-center justify-between border-t border-bree-border">
+                  <p className="text-sm font-semibold text-bree-text-primary">
+                    Order Total
+                  </p>
+                  <p className="text-base font-bold text-bree-text-primary">
+                    ₹{Number(order.total ?? order.amount ?? 0).toLocaleString()}
+                  </p>
+                </div>
               </div>
-              <div className="text-right">
+            ) : (
+              /* Graceful fallback for legacy orders with no items array */
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-bree-text-primary text-sm">
+                    {order.product_name ||
+                      order.product_names ||
+                      "Unknown product"}
+                  </p>
+                  <p className="text-bree-text-secondary text-xs mt-0.5">
+                    Qty: {order.quantity ?? "—"}
+                  </p>
+                </div>
                 <p className="font-semibold text-bree-text-primary">
                   ₹{Number(order.total ?? order.amount ?? 0).toLocaleString()}
                 </p>
-                <span
-                  className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${
-                    PAYMENT_COLORS[order.payment_status] ||
-                    "bg-gray-100 text-gray-600"
-                  }`}
-                >
-                  {order.payment_status}
-                </span>
               </div>
-            </div>
+            )}
           </div>
 
+          {/* Shipping Address */}
           <div>
-            <p className="text-xs text-bree-text-secondary mb-2 font-medium uppercase tracking-wide">
+            <p className="text-xs text-bree-text-secondary mb-2 font-medium uppercase tracking-wide flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5" />
               Shipping Address
             </p>
-            <p className="text-sm text-bree-text-primary bg-bree-bg rounded-xl p-3">
+            <p className="text-sm text-bree-text-primary bg-bree-bg rounded-xl p-3 leading-relaxed">
               {order.shipping_address ||
                 order.address_snapshot ||
                 order.shippingAddress ||
@@ -356,6 +412,7 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
             </p>
           </div>
 
+          {/* Update Status */}
           <div>
             <p className="text-xs text-bree-text-secondary mb-2 font-medium uppercase tracking-wide">
               Update Order Status
@@ -367,7 +424,7 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
                   onClick={() => onStatusChange([order.id], s)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold border capitalize transition cursor-pointer
                     ${
-                      order.order_status === s
+                      normalizeStatus(order.order_status) === s
                         ? STATUS_COLORS[s] +
                           " ring-2 ring-offset-1 ring-bree-primary"
                         : "bg-white border-bree-border text-bree-text-secondary hover:border-bree-primary hover:text-bree-primary"
@@ -379,6 +436,7 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
             </div>
           </div>
 
+          {/* Order Timeline */}
           <div>
             <p className="text-xs text-bree-text-secondary mb-3 font-medium uppercase tracking-wide">
               Order Timeline
@@ -415,7 +473,7 @@ const OrderModal = ({ order, onClose, onStatusChange }) => {
   );
 };
 
-/* ── bulk bar ─────────────────────────────────────────────────────────────── */
+/* ── bulk bar ────────────────────────────────────────────────────────────── */
 const BulkBar = ({ count, onApply, onClear, availableStatuses }) => {
   const [status, setStatus] = useState("");
   const hasSelection = count > 0;
@@ -486,9 +544,7 @@ const BulkBar = ({ count, onApply, onClear, availableStatuses }) => {
   );
 };
 
-/* ── inline status dropdown ───────────────────────────────────────────────── */
-// FIX 2: fallback to "pending" if currentStatus is not a valid order status,
-// preventing a blank/broken <select> when corrupted data comes through.
+/* ── inline status dropdown ──────────────────────────────────────────────── */
 const StatusCell = ({ orderId, currentStatus, onChange }) => {
   const safeStatus = normalizeStatus(currentStatus);
   const availableStatuses = ORDER_TRANSITIONS[safeStatus] || [safeStatus];
@@ -514,10 +570,7 @@ const StatusCell = ({ orderId, currentStatus, onChange }) => {
   );
 };
 
-/* ── sort button ─────────────────────────────────────────────────────────────
- * FIX 4: defined OUTSIDE Orders() so it isn't recreated on every render.
- * Wrapped in memo to prevent re-renders when unrelated state changes.
- */
+/* ── sort button ─────────────────────────────────────────────────────────── */
 const SortBtn = memo(({ field, sortField, onSort }) => (
   <button
     onClick={() => onSort(field)}
@@ -533,7 +586,7 @@ const SortBtn = memo(({ field, sortField, onSort }) => (
   </button>
 ));
 
-/* ── main page ────────────────────────────────────────────────────────────── */
+/* ── main page ───────────────────────────────────────────────────────────── */
 const Orders = () => {
   const [orders, setOrders] = useState([]);
   const [searchInput, setSearchInput] = useState("");
@@ -570,7 +623,6 @@ const Orders = () => {
     setPage(1);
   }, []);
 
-  /* FIX 5: reset page on filter OR sort change so stale pages are never shown */
   useEffect(() => {
     setPage(1);
   }, [filterStatus, filterDate, sortField, sortDir]);
@@ -586,7 +638,6 @@ const Orders = () => {
         setOrders(res.data?.orders || []);
         setTotal(res.data?.total || 0);
       } catch (err) {
-        // Ignore cancellation errors — they're expected from StrictMode double-invoke
         if (
           axios.isCancel(err) ||
           err?.name === "CanceledError" ||
@@ -608,9 +659,6 @@ const Orders = () => {
     return () => controller.abort();
   }, [fetchOrders]);
 
-  // Real-time sync: update orders when server sends 'order:updated'
-  // Stable reference via useCallback so the socket listener is not torn down
-  // and re-added on every render.
   const handleOrderSync = useCallback((updated) => {
     setOrders((prev) =>
       prev.map((o) => (o.id === updated.id ? { ...o, ...updated } : o)),
@@ -618,7 +666,7 @@ const Orders = () => {
     setSelected((prev) =>
       prev && prev.id === updated.id ? { ...prev, ...updated } : prev,
     );
-  }, []); // no deps — only uses state setters which are stable
+  }, []);
 
   useOrdersSync(handleOrderSync);
 
@@ -628,7 +676,6 @@ const Orders = () => {
       if (!ORDER_STATUSES.includes(newStatus)) return;
       const prev = orders;
 
-      // optimistic UI
       setOrders((prevOrders) =>
         prevOrders.map((o) =>
           ids.includes(o.id) ? { ...o, order_status: newStatus } : o,
@@ -649,7 +696,6 @@ const Orders = () => {
             { status: newStatus },
             AUTH(),
           );
-          // reconcile with server
           const updated = res.data.order || res.data;
           setOrders((prevOrders) =>
             prevOrders.map((o) =>
@@ -684,7 +730,6 @@ const Orders = () => {
         }
         toast.success("Order status updated");
       } catch (err) {
-        // rollback
         setOrders(prev);
         toast.error("Failed to update order status");
       }
@@ -692,11 +737,8 @@ const Orders = () => {
     [orders],
   );
 
-  // alias used by UI components
   const handleStatusChange = useCallback(
-    (ids, newStatus) => {
-      applyStatusChange(ids, newStatus);
-    },
+    (ids, newStatus) => applyStatusChange(ids, newStatus),
     [applyStatusChange],
   );
 
@@ -721,7 +763,6 @@ const Orders = () => {
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  /* FIX 4 (cont.): handleSort now only sets state — SortBtn is outside the component */
   const handleSort = useCallback((field) => {
     setSortField((prev) => {
       if (prev === field) {
@@ -744,7 +785,7 @@ const Orders = () => {
   return (
     <AdminLayout>
       <div className="space-y-5">
-        {/* ── page header ── */}
+        {/* page header */}
         <div>
           <h1 className="font-outfit text-2xl font-semibold text-bree-text-primary">
             Orders
@@ -754,7 +795,7 @@ const Orders = () => {
           </p>
         </div>
 
-        {/* ── search + filters row ── */}
+        {/* search + filters */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex flex-1 min-w-[220px] max-w-sm items-center gap-2">
             <div className="relative flex-1">
@@ -768,7 +809,7 @@ const Orders = () => {
                     handleSearch();
                   }
                 }}
-                placeholder="Search by Order ID, Name, or Mobile…"
+                placeholder="Search by Order #, Name, Email, or Mobile…"
                 className="pl-10 pr-10 h-10 rounded-xl border-bree-border focus:border-bree-primary text-sm"
               />
               {searchInput && (
@@ -823,7 +864,7 @@ const Orders = () => {
           </AnimatePresence>
         </div>
 
-        {/* ── active filter chips ── */}
+        {/* active filter chips */}
         <AnimatePresence>
           {(filterStatus !== "all" || filterDate !== "all") && (
             <motion.div
@@ -860,7 +901,7 @@ const Orders = () => {
           )}
         </AnimatePresence>
 
-        {/* ── bulk bar ── */}
+        {/* bulk bar */}
         <BulkBar
           count={checked.length}
           availableStatuses={getCommonBulkStatuses(orders, checked)}
@@ -868,7 +909,7 @@ const Orders = () => {
           onClear={() => setChecked([])}
         />
 
-        {/* ── table ── */}
+        {/* table */}
         <div className="bg-white rounded-2xl shadow-premium border border-bree-border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -888,7 +929,7 @@ const Orders = () => {
                   </th>
                   <th className="py-3 px-4 text-left text-xs font-semibold text-bree-text-secondary uppercase tracking-wide whitespace-nowrap">
                     <span className="flex items-center gap-1">
-                      Order ID{" "}
+                      Order #{" "}
                       <SortBtn
                         field="id"
                         sortField={sortField}
@@ -909,11 +950,16 @@ const Orders = () => {
                   <th className="py-3 px-4 text-left text-xs font-semibold text-bree-text-secondary uppercase tracking-wide whitespace-nowrap">
                     Mobile
                   </th>
-                  <th className="py-3 px-4 text-left text-xs font-semibold text-bree-text-secondary uppercase tracking-wide whitespace-nowrap">
-                    Product
+                  {/* ── Products column (was "Product") ── */}
+                  <th className="py-3 px-4 text-left text-xs font-semibold text-bree-text-secondary uppercase tracking-wide">
+                    Products
                   </th>
                   <th className="py-3 px-4 text-left text-xs font-semibold text-bree-text-secondary uppercase tracking-wide">
                     Qty
+                  </th>
+                  {/* ── Address column ── */}
+                  <th className="py-3 px-4 text-left text-xs font-semibold text-bree-text-secondary uppercase tracking-wide">
+                    Address
                   </th>
                   <th className="py-3 px-4 text-left text-xs font-semibold text-bree-text-secondary uppercase tracking-wide whitespace-nowrap">
                     <span className="flex items-center gap-1">
@@ -952,7 +998,7 @@ const Orders = () => {
                       key={i}
                       className="border-b border-bree-border animate-pulse"
                     >
-                      {[...Array(11)].map((__, j) => (
+                      {[...Array(12)].map((__, j) => (
                         <td key={j} className="py-4 px-4">
                           <div className="h-3 bg-bree-bg rounded w-full" />
                         </td>
@@ -961,7 +1007,7 @@ const Orders = () => {
                   ))
                 ) : orders.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="py-16 text-center">
+                    <td colSpan={12} className="py-16 text-center">
                       <Package className="w-10 h-10 text-bree-border mx-auto mb-3" />
                       <p className="text-bree-text-secondary text-sm">
                         No orders found
@@ -1002,7 +1048,7 @@ const Orders = () => {
                         />
                       </td>
                       <td className="py-3 px-4 text-sm font-medium text-bree-primary whitespace-nowrap">
-                        #{order.id}
+                        #{order.order_number || order.id}
                       </td>
                       <td className="py-3 px-4 text-sm text-bree-text-primary whitespace-nowrap">
                         {order.customer_name}
@@ -1010,14 +1056,27 @@ const Orders = () => {
                       <td className="py-3 px-4 text-sm text-bree-text-secondary whitespace-nowrap">
                         {order.mobile_number}
                       </td>
-                      <td className="py-3 px-4 text-sm text-bree-text-secondary max-w-[160px] truncate">
-                        {order.product_name ||
-                          order.items?.[0]?.name ||
-                          "Unknown"}
+
+                      {/* ── Products: all names comma-separated ── */}
+                      <td
+                        className="py-3 px-4 text-sm text-bree-text-secondary max-w-[200px] truncate"
+                        title={getProductNames(order)}
+                      >
+                        {getProductNames(order)}
                       </td>
+
                       <td className="py-3 px-4 text-sm text-center text-bree-text-secondary">
-                        {order.quantity ?? order.items?.[0]?.quantity ?? "—"}
+                        {order.quantity ?? "—"}
                       </td>
+
+                      {/* ── Address column ── */}
+                      <td
+                        className="py-3 px-4 text-sm text-bree-text-secondary max-w-[160px] truncate"
+                        title={order.shipping_address || ""}
+                      >
+                        {order.shipping_address || "—"}
+                      </td>
+
                       <td className="py-3 px-4 text-sm font-medium text-bree-text-primary whitespace-nowrap">
                         ₹{Number(order.amount).toLocaleString()}
                       </td>
@@ -1112,8 +1171,7 @@ const Orders = () => {
         </div>
       </div>
 
-      {/* FIX 1 + 7: AnimatePresence at the page level with mode="wait" and key={order.id}
-          so modal exit animation fires correctly and switching orders re-mounts cleanly */}
+      {/* AnimatePresence at page level with mode="wait" and key={order.id} */}
       <AnimatePresence mode="wait">
         {selectedOrder && (
           <OrderModal
