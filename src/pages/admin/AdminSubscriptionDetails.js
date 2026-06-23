@@ -115,6 +115,52 @@ const PAYMENT_STATUS_CONFIG = {
   },
 };
 
+// ── OrderFulfillmentBadge ─────────────────────────────────────────────────────
+// Used exclusively in the Renewal Orders table.
+// Displays the ORDER fulfillment status (confirmed → processing → dispatched →
+// delivered) with appropriate colours. This is intentionally separate from
+// StatusBadge (which is for subscription_status / billing state) so the two
+// status systems are never visually conflated.
+const ORDER_FULFILLMENT_CONFIG = {
+  pending: {
+    classes: "bg-amber-100 text-amber-700 border-amber-200",
+    label: "Pending",
+  },
+  confirmed: {
+    classes: "bg-sky-100 text-sky-700 border-sky-200",
+    label: "Confirmed",
+  },
+  processing: {
+    classes: "bg-indigo-100 text-indigo-700 border-indigo-200",
+    label: "Processing",
+  },
+  dispatched: {
+    classes: "bg-violet-100 text-violet-700 border-violet-200",
+    label: "Dispatched",
+  },
+  delivered: {
+    classes: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    label: "Delivered",
+  },
+  cancelled: {
+    classes: "bg-red-100 text-red-700 border-red-200",
+    label: "Cancelled",
+  },
+};
+
+const OrderFulfillmentBadge = ({ status }) => {
+  const key = (status || "pending").toLowerCase();
+  const config =
+    ORDER_FULFILLMENT_CONFIG[key] ?? ORDER_FULFILLMENT_CONFIG.pending;
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${config.classes}`}
+    >
+      {config.label}
+    </span>
+  );
+};
+
 const PaymentStatusBadge = ({ status }) => {
   const key = (status || "").toLowerCase();
   const config = PAYMENT_STATUS_CONFIG[key] ?? PAYMENT_STATUS_CONFIG.pending;
@@ -449,13 +495,26 @@ const AdminSubscriptionDetails = () => {
                     subscription.razorpaySubscriptionId,
                   ],
                   ["Razorpay Plan ID", subscription.razorpayPlanId],
-                  ["Frequency", "Monthly"],
+                  // Dynamic — derived from the plan name or product name;
+                  // NOT hard-coded to "Monthly". Falls back gracefully.
+                  [
+                    "Plan",
+                    subscription.planName ||
+                      subscription.productItems?.[0]?.product_name ||
+                      "-",
+                  ],
                   [
                     "Amount",
                     `₹${subscription.amount?.toLocaleString("en-IN")}`,
                   ],
+                  // Shows how many renewal fulfillment orders have been created
+                  [
+                    "Renewals Completed",
+                    renewalOrders.length > 0
+                      ? `${renewalOrders.length} cycle${renewalOrders.length !== 1 ? "s" : ""}`
+                      : "First cycle",
+                  ],
                   ["Created", formatDateTime(subscription.startDate)],
-                  // Req 1: no successful renewal yet → "Not Renewed Yet", never "-"
                   [
                     "Last Renewal",
                     subscription.lastRenewal
@@ -654,19 +713,25 @@ const AdminSubscriptionDetails = () => {
             </div>
 
             {/* ── Renewal Orders — full left-column width ──────────────────
-                Moved from right sidebar (420 px) so the 5-column table has
-                enough horizontal room and never clips headers or cell values. */}
+                One row per subscription.charged webhook event. Each row is an
+                independent fulfillment order with its own BREE-XXXXXX number.
+                Clicking a row navigates to that order's admin detail page. */}
             <div className="rounded-3xl bg-white border border-bree-border p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-bree-text-primary">
-                  Renewal Orders
-                </h3>
+                <div>
+                  <h3 className="text-lg font-semibold text-bree-text-primary">
+                    Renewal Orders
+                  </h3>
+                  <p className="text-xs text-bree-text-secondary mt-0.5">
+                    Each row is a separate fulfillment order created on renewal.
+                  </p>
+                </div>
                 <Button
                   size="sm"
                   className="rounded-2xl bg-slate-100 text-slate-700 hover:bg-slate-200"
                   onClick={() => navigate("/admin/orders")}
                 >
-                  View Orders
+                  View All Orders
                 </Button>
               </div>
               <div className="overflow-x-auto">
@@ -677,7 +742,7 @@ const AdminSubscriptionDetails = () => {
                         "Order Number",
                         "Renewal Date",
                         "Amount",
-                        "Order Status",
+                        "Fulfillment Status",
                         "Payment Status",
                       ].map((heading) => (
                         <th
@@ -694,9 +759,11 @@ const AdminSubscriptionDetails = () => {
                       renewalOrders.map((order) => (
                         <tr
                           key={order.id}
-                          className="border-t border-bree-border hover:bg-bree-bg/50 transition-colors"
+                          className="border-t border-bree-border hover:bg-bree-bg/50 transition-colors cursor-pointer"
+                          onClick={() => navigate(`/admin/orders/${order.id}`)}
+                          title="View order details"
                         >
-                          <td className="px-4 py-3 text-sm font-medium text-bree-text-primary text-xs">
+                          <td className="px-4 py-3 text-sm font-semibold text-bree-primary underline-offset-2 hover:underline whitespace-nowrap">
                             {order.orderNumber ||
                               order.order_number ||
                               order.id}
@@ -707,13 +774,18 @@ const AdminSubscriptionDetails = () => {
                           <td className="px-4 py-3 text-sm font-semibold text-bree-text-primary whitespace-nowrap">
                             ₹{Number(order.total || 0).toLocaleString("en-IN")}
                           </td>
+                          {/*
+                            Fulfillment status: use order_status directly.
+                            Renewal orders are fulfillment records — their
+                            order_status is what the warehouse team manages
+                            (confirmed → processing → dispatched → delivered).
+                            subscription_status on a renewal row always reads
+                            'active' (set at creation) and is not meaningful
+                            for display here.
+                          */}
                           <td className="px-4 py-3">
-                            <StatusBadge
-                              status={getDisplayStatus(
-                                order.subscription_status ??
-                                  subscription.subscriptionStatus,
-                                order.order_status,
-                              )}
+                            <OrderFulfillmentBadge
+                              status={order.order_status}
                             />
                           </td>
                           <td className="px-4 py-3">
@@ -727,7 +799,8 @@ const AdminSubscriptionDetails = () => {
                           colSpan={5}
                           className="px-4 py-10 text-center text-sm text-bree-text-secondary"
                         >
-                          No renewal orders found.
+                          No renewal orders yet. They appear here after each
+                          successful Razorpay renewal charge.
                         </td>
                       </tr>
                     )}
