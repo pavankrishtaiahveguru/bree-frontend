@@ -731,7 +731,11 @@ const Orders = () => {
         toast.success("Order status updated");
       } catch (err) {
         setOrders(prev);
-        toast.error("Failed to update order status");
+        const backendMessage =
+          err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          "Failed to update order status";
+        toast.error(backendMessage);
       }
     },
     [orders],

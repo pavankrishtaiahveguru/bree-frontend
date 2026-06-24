@@ -169,7 +169,10 @@ const Checkout = () => {
       const lineItemsTotal = buildLineItemsTotal(lineItems);
 
       console.log("[Checkout] Computed line_items:", lineItems);
-      console.log("[Checkout] Computed line_items_total (paise):", lineItemsTotal);
+      console.log(
+        "[Checkout] Computed line_items_total (paise):",
+        lineItemsTotal,
+      );
 
       if (!lineItems.length) {
         toast.error("Your cart is empty.");
@@ -177,7 +180,9 @@ const Checkout = () => {
         return;
       }
       if (!(lineItemsTotal > 0)) {
-        toast.error("Unable to calculate order total. Please refresh and try again.");
+        toast.error(
+          "Unable to calculate order total. Please refresh and try again.",
+        );
         setLoadingPhase("idle");
         return;
       }
@@ -205,7 +210,10 @@ const Checkout = () => {
         shippingAddress: undefined,
       };
 
-      console.log("[Checkout] Creating order — request payload:", createOrderPayload);
+      console.log(
+        "[Checkout] Creating order — request payload:",
+        createOrderPayload,
+      );
       const paymentResponse = await axios.post(
         "/api/payment/create-order",
         createOrderPayload,
@@ -339,6 +347,10 @@ const Checkout = () => {
       };
 
       // ── STEP 4: Validate + open Razorpay Magic Checkout ───────────────────
+      console.log("=================================");
+      console.log("MAGIC CHECKOUT FULL OPTIONS");
+      console.log(JSON.stringify(checkoutOptions, null, 2));
+      console.log("=================================");
       console.log("[Checkout] Razorpay options before opening:", {
         key: checkoutOptions.key,
         order_id: checkoutOptions.order_id,

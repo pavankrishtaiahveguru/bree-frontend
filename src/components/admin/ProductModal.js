@@ -3,9 +3,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Upload, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-// DESIGN DECISION: This file uses snake_case "is_subscription" everywhere
-// (EMPTY_FORM key, checkbox binding, payload) so it matches the DB column
-// name exactly and no camelCase ↔ snake_case conversion is ever needed.
+// DESIGN DECISION: This file uses snake_case for all DB-mapped keys
+// (is_subscription, journey_level, show_recommendations) so they match
+// the column names exactly and no camelCase conversion is ever needed.
 
 const EMPTY_FORM = {
   name: "",
@@ -17,11 +17,21 @@ const EMPTY_FORM = {
   quantity: "",
   stockQty: "",
   features: "",
-  is_subscription: false, // snake_case — matches DB column and payload key
+  is_subscription: false,
   popular: false,
   status: "In Stock",
   displayOrder: "",
+  journey_level: "", // 0 = unclassified; 1–4 = trial→annual
+  show_recommendations: true, // hide recommendations for this product?
 };
+
+const JOURNEY_LEVEL_OPTIONS = [
+  { value: "", label: "— Select Journey Level —" },
+  { value: "1", label: "Level 1 — Trial (7-Day)" },
+  { value: "2", label: "Level 2 — Monthly Pack / Subscription" },
+  { value: "3", label: "Level 3 — 6-Month Supply" },
+  { value: "4", label: "Level 4 — 1-Year Pack (highest)" },
+];
 
 const validate = (form, imageFile, isEdit) => {
   const errors = {};
@@ -50,29 +60,32 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
   useEffect(() => {
     if (open) {
       if (initial) {
-        // BUG FIX 1 — Previous code had two problems:
-        // (a) A syntax error: dangling || before a commented-out line meant
-        //     the file couldn't even parse in strict mode.
-        // (b) The mapped value was assigned to camelCase "isSubscription"
-        //     but then set on the form as "isSubscription" while EMPTY_FORM
-        //     and the checkbox both used "is_subscription". The mapped value
-        //     was orphaned, and ...initial spread overwrote is_subscription
-        //     with the raw DB integer (0 or 1) which !== true, so the
-        //     checkbox always appeared unchecked after opening edit.
-        //
-        // Fix: normalise to a real boolean, then assign to "is_subscription"
-        // (same key as everywhere else) AFTER the ...initial spread.
+        // Normalise boolean fields so checkboxes always reflect DB state
         const is_subscription_bool =
           initial.is_subscription === 1 ||
           initial.is_subscription === true ||
           initial.isSubscription === 1 ||
           initial.isSubscription === true;
 
+        // show_recommendations defaults to true (1) when not present
+        const show_recommendations_bool =
+          initial.show_recommendations === undefined
+            ? true
+            : initial.show_recommendations !== 0 &&
+              initial.show_recommendations !== false &&
+              initial.show_recommendations !== "0" &&
+              initial.show_recommendations !== "false";
+
         setForm({
           ...EMPTY_FORM,
           ...initial,
-          // Written after ...initial so the raw DB integer can't win.
           is_subscription: is_subscription_bool,
+          show_recommendations: show_recommendations_bool,
+          journey_level:
+            initial.journey_level !== undefined &&
+            initial.journey_level !== null
+              ? String(initial.journey_level)
+              : "",
           stockQty: initial.stock_qty ?? initial.stockQty ?? "",
           displayOrder: initial.display_order ?? initial.displayOrder ?? "",
           features: Array.isArray(initial.features)
@@ -95,7 +108,14 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
   }, [open, initial]);
 
   const set = (key, value) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm((prev) => {
+      const next = { ...prev, [key]: value };
+      // Auto-disable show_recommendations when subscription is enabled
+      if (key === "is_subscription" && value === true) {
+        next.show_recommendations = false;
+      }
+      return next;
+    });
   };
 
   const handleFile = (e) => {
@@ -141,17 +161,12 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
         features: form.features || "",
         displayOrder:
           form.displayOrder !== "" ? Number(form.displayOrder) : undefined,
+        journey_level:
+          form.journey_level !== "" ? Number(form.journey_level) : 0,
+        show_recommendations: form.show_recommendations,
+        is_subscription: form.is_subscription,
         imageFile,
-        is_subscription: form.is_subscription, // boolean true/false
       };
-
-      // DEBUG — remove after confirming is_subscription saves correctly ***
-      // console.log("================================");
-      // console.log("PRODUCT PAYLOAD");
-      // console.log(payload);
-      // console.log("isSubscription:", payload.isSubscription);
-      // console.log("is_subscription:", payload.is_subscription);
-      // console.log("================================");
 
       await onSave(payload);
       onClose();
@@ -352,8 +367,33 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
                     className="w-full h-12 px-4 rounded-2xl border border-bree-border outline-none focus:border-bree-primary"
                   />
                   <p className="text-xs text-bree-text-secondary mt-1">
-                    Controls the order products appear on the shop page. Lower
-                    number = shown first.
+                    Controls the order products appear on the shop page.
+                  </p>
+                </div>
+
+                {/* Journey Level */}
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-bree-text-primary">
+                    Journey Level{" "}
+                    <span className="text-bree-text-secondary font-normal">
+                      (controls upgrade recommendations)
+                    </span>
+                  </label>
+                  <select
+                    value={form.journey_level}
+                    onChange={(e) => set("journey_level", e.target.value)}
+                    className="w-full h-12 px-4 rounded-2xl border border-bree-border outline-none focus:border-bree-primary bg-white"
+                  >
+                    {JOURNEY_LEVEL_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-bree-text-secondary mt-1">
+                    Level 1 → recommends Level 2. Level 2 → recommends Levels 3
+                    &amp; 4. Level 3 → recommends Level 4. Level 4 → no
+                    recommendations.
                   </p>
                 </div>
 
@@ -407,14 +447,10 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
                       Subscription Product
                     </p>
                     <p className="text-sm text-bree-text-secondary">
-                      Enable monthly recurring subscription
+                      Enable monthly recurring subscription (automatically
+                      disables recommendations)
                     </p>
                   </div>
-                  {/* BUG FIX 1: Both checked and onChange use "is_subscription"
-                      (snake_case) matching EMPTY_FORM and the payload key.
-                      Previously "isSubscription" (camel) was used in useEffect
-                      but "is_subscription" everywhere else — a key mismatch
-                      that left the checkbox permanently unchecked on edit. */}
                   <input
                     type="checkbox"
                     checked={form.is_subscription}
@@ -422,6 +458,28 @@ const ProductModal = ({ open, onClose, onSave, initial = null }) => {
                     className="w-5 h-5 accent-bree-primary"
                   />
                 </div>
+
+                {/* Show Recommendations — hidden when subscription is on */}
+                {!form.is_subscription && (
+                  <div className="flex items-center justify-between border border-bree-border rounded-2xl px-4 py-3">
+                    <div>
+                      <p className="font-medium text-bree-text-primary">
+                        Show Upgrade Recommendations
+                      </p>
+                      <p className="text-sm text-bree-text-secondary">
+                        Display higher-tier products as upgrade suggestions
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={form.show_recommendations}
+                      onChange={(e) =>
+                        set("show_recommendations", e.target.checked)
+                      }
+                      className="w-5 h-5 accent-bree-primary"
+                    />
+                  </div>
+                )}
 
                 {/* Popular */}
                 <div className="flex items-center justify-between border border-bree-border rounded-2xl px-4 py-3">

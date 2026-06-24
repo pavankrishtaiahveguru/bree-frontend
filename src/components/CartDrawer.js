@@ -35,14 +35,18 @@ const CartDrawer = ({ isOpen, onClose }) => {
   const primaryProductId = useMemo(() => cartItems[0]?.id, [cartItems]);
   const primaryProduct = useMemo(() => cartItems[0], [cartItems]);
 
-  // Get cart product IDs to exclude from recommendations
+  // Build a Set of cart product IDs so we can filter them out of
+  // recommendations without depending on product names or slugs.
   const cartProductIds = useMemo(
     () => new Set(cartItems.map((item) => item.id)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [cartItems.map((i) => i.id).join(",")],
   );
 
-  // Fetch recommendations based on primary product
+  // ── Fetch recommendations via journey-based API ──────────────────────────
+  // The API already enforces all business rules (is_subscription, journey_level,
+  // show_recommendations, inactive, out-of-stock). We only need to additionally
+  // strip products that are already in the cart on the client side.
   useEffect(() => {
     if (!primaryProductId) {
       setRecommendations([]);
@@ -59,11 +63,16 @@ const CartDrawer = ({ isOpen, onClose }) => {
           { signal: controller.signal },
         );
 
-        // Filter out products already in cart
-        const filteredRecs = Array.isArray(response.data)
-          ? response.data.filter((rec) => !cartProductIds.has(rec.id))
-          : [];
+        const data = Array.isArray(response.data) ? response.data : [];
 
+        // Debug log as required by spec
+        console.log("Current Product:", primaryProduct?.name);
+        console.log("Journey Level:", primaryProduct?.journey_level);
+        console.log("Is Subscription:", primaryProduct?.is_subscription);
+        console.log("Recommended Products:", data);
+
+        // Filter out anything already in the cart
+        const filteredRecs = data.filter((rec) => !cartProductIds.has(rec.id));
         setRecommendations(filteredRecs);
       } catch (error) {
         if (error.name !== "CanceledError") {
@@ -81,17 +90,15 @@ const CartDrawer = ({ isOpen, onClose }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [primaryProductId]);
 
-  // Handle product upgrade - replace instead of add
+  // ── Handle upgrade: replace current product with recommended one ─────────
   const handleUpgradeProduct = useCallback(
     async (recommendedProduct) => {
       setIsReplacingProduct(true);
       try {
-        // Remove current product
         if (primaryProduct) {
           removeFromCart(primaryProduct.id);
         }
 
-        // Add recommended product with complete data
         setTimeout(() => {
           addToCart(
             {
@@ -106,7 +113,7 @@ const CartDrawer = ({ isOpen, onClose }) => {
           );
           toast.success(`Upgraded to ${recommendedProduct.name}`);
           setIsReplacingProduct(false);
-        }, 300); // Smooth transition delay
+        }, 300);
       } catch (error) {
         console.error("❌ Upgrade failed:", error);
         toast.error("Failed to upgrade product");
@@ -116,16 +123,14 @@ const CartDrawer = ({ isOpen, onClose }) => {
     [primaryProduct, removeFromCart, addToCart],
   );
 
-  // Calculate savings for a recommendation
   const calculateSavings = useCallback((product) => {
-    if (!product.mrp || !product.quantity || product.quantity <= 0) return null;
-    const savings =
-      Number(product.mrp) * product.quantity -
-      Number(product.price) * product.quantity;
-    return Math.round(savings);
+    if (!product.mrp) return null;
+
+    const savings = Number(product.mrp) - Number(product.price);
+
+    return savings > 0 ? Math.round(savings) : null;
   }, []);
 
-  // Calculate price per unit for recommendation
   const getPricePerUnit = useCallback((product) => {
     if (!product.quantity || product.quantity <= 0)
       return Math.round(Number(product.price));
@@ -137,8 +142,6 @@ const CartDrawer = ({ isOpen, onClose }) => {
       toast.error("Add at least one product before checkout.");
       return;
     }
-
-    // Close drawer and navigate to checkout
     onClose();
     navigate("/checkout");
   };
@@ -146,7 +149,6 @@ const CartDrawer = ({ isOpen, onClose }) => {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
-      // refresh cart when opening drawer
       (async () => {
         try {
           await syncCart();
@@ -160,6 +162,10 @@ const CartDrawer = ({ isOpen, onClose }) => {
       document.body.style.overflow = "auto";
     };
   }, [isOpen, syncCart]);
+
+  // Whether to render the recommendations section at all.
+  // Completely hidden (no empty container) when there are no recommendations.
+  const showRecommendations = recommendations.length > 0 && !isReplacingProduct;
 
   return (
     <div
@@ -306,8 +312,10 @@ const CartDrawer = ({ isOpen, onClose }) => {
                 ))}
               </div>
 
-              {/* Recommendations Section */}
-              {recommendations.length > 0 && !isReplacingProduct && (
+              {/* ── Recommendations Section ────────────────────────────────
+                  Only rendered when recommendations.length > 0.
+                  Completely absent from DOM when empty — no empty containers. */}
+              {showRecommendations && (
                 <div
                   className="space-y-2 mt-4 pt-3 border-t border-bree-border/30"
                   style={{ animation: "fadeInUp 0.5s ease-out 0.3s both" }}
@@ -315,7 +323,7 @@ const CartDrawer = ({ isOpen, onClose }) => {
                   <div className="flex items-center gap-2 pt-2">
                     <Sparkles className="w-4 h-4 text-amber-500" />
                     <p className="text-xs font-medium text-bree-text-secondary">
-                      Upgrade to monthly subscription
+                      Upgrade your wellness journey
                     </p>
                   </div>
 
@@ -349,8 +357,8 @@ const CartDrawer = ({ isOpen, onClose }) => {
                               {rec.name}
                             </h4>
                             <p className="text-xs text-bree-text-secondary mt-0.5">
-                              ₹{pricePerUnit}/bottle ·{" "}
-                              {savings && `Save ₹${savings}`}
+                              ₹{pricePerUnit}/bottle
+                              {savings ? ` · Save ₹${savings}` : ""}
                             </p>
                           </div>
 
@@ -358,7 +366,7 @@ const CartDrawer = ({ isOpen, onClose }) => {
                           <div className="flex items-center gap-2 flex-shrink-0">
                             <div className="text-right">
                               <p className="font-bold text-sm text-bree-primary">
-                                ₹{Number(rec.price).toLocaleString("en-IN")}/mo
+                                ₹{Number(rec.price).toLocaleString("en-IN")}
                               </p>
                             </div>
                             <ArrowRight className="w-4 h-4 text-bree-primary group-hover:translate-x-0.5 transition-transform" />
@@ -373,7 +381,7 @@ const CartDrawer = ({ isOpen, onClose }) => {
           )}
         </div>
 
-        {/* Footer - Only visible when cart has items */}
+        {/* Footer — only visible when cart has items */}
         {cartItems.length > 0 && (
           <div className="border-t border-bree-border bg-white px-5 py-4 space-y-2.5 flex-shrink-0">
             {/* Subtotal */}
@@ -386,7 +394,7 @@ const CartDrawer = ({ isOpen, onClose }) => {
               </span>
             </div>
 
-            {/* Proceed to Checkout Button */}
+            {/* Proceed to Checkout */}
             <Button
               onClick={handleProceedToCheckout}
               disabled={isReplacingProduct}
@@ -395,7 +403,7 @@ const CartDrawer = ({ isOpen, onClose }) => {
               Proceed to Checkout
             </Button>
 
-            {/* Clear Cart Button */}
+            {/* Clear Cart */}
             <button
               onClick={clearCart}
               className="w-full text-xs font-medium text-bree-text-secondary hover:text-bree-text-primary transition-colors py-1.5"
