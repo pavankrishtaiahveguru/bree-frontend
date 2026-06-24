@@ -168,11 +168,11 @@ const Checkout = () => {
       const lineItems = buildLineItems(cartItems);
       const lineItemsTotal = buildLineItemsTotal(lineItems);
 
-      console.log("[Checkout] Computed line_items:", lineItems);
-      console.log(
-        "[Checkout] Computed line_items_total (paise):",
-        lineItemsTotal,
-      );
+      // console.log("[Checkout] Computed line_items:", lineItems);
+      // console.log(
+      //   "[Checkout] Computed line_items_total (paise):",
+      //   lineItemsTotal,
+      // );
 
       if (!lineItems.length) {
         toast.error("Your cart is empty.");
@@ -210,23 +210,23 @@ const Checkout = () => {
         shippingAddress: undefined,
       };
 
-      console.log(
-        "[Checkout] Creating order — request payload:",
-        createOrderPayload,
-      );
+      // console.log(
+      //   "[Checkout] Creating order — request payload:",
+      //   createOrderPayload,
+      // );
       const paymentResponse = await axios.post(
         "/api/payment/create-order",
         createOrderPayload,
       );
       const razorpayOrder = paymentResponse.data;
-      console.log("[Checkout] Creating order — response:", razorpayOrder);
+      // console.log("[Checkout] Creating order — response:", razorpayOrder);
 
       // ── STEP 2: Load Razorpay SDK ─────────────────────────────────────────
       setLoadingPhase("opening");
       try {
         await loadRazorpayScript();
       } catch (loadErr) {
-        console.error("[Checkout] Script load failed:", loadErr);
+        // console.error("[Checkout] Script load failed:", loadErr);
         toast.error("Failed to load payment gateway. Please try again.");
         setLoadingPhase("idle");
         return;
@@ -288,7 +288,7 @@ const Checkout = () => {
         // backend should independently fetch authoritative customer_details
         // via Razorpay's Fetch Order API after verification.
         handler: async (response) => {
-          console.log("[Checkout] Payment success:", response);
+          // console.log("[Checkout] Payment success:", response);
 
           setLoadingPhase("verifying");
 
@@ -314,7 +314,7 @@ const Checkout = () => {
               verifyPayload,
             );
 
-            console.log("[Checkout] Verify response:", verifyResponse.data);
+            // console.log("[Checkout] Verify response:", verifyResponse.data);
 
             if (!verifyResponse.data.success) {
               throw new Error(
@@ -324,8 +324,8 @@ const Checkout = () => {
 
             const savedOrderId = verifyResponse.data.order_id;
 
-            console.log("[Checkout] Saved Order ID:", savedOrderId);
-            console.log("[Checkout] Navigating to success page...");
+            // console.log("[Checkout] Saved Order ID:", savedOrderId);
+            // console.log("[Checkout] Navigating to success page...");
 
             navigate(`/checkout/success?orderId=${savedOrderId}`, {
               replace: true,
@@ -347,16 +347,16 @@ const Checkout = () => {
       };
 
       // ── STEP 4: Validate + open Razorpay Magic Checkout ───────────────────
-      console.log("=================================");
-      console.log("MAGIC CHECKOUT FULL OPTIONS");
-      console.log(JSON.stringify(checkoutOptions, null, 2));
-      console.log("=================================");
-      console.log("[Checkout] Razorpay options before opening:", {
-        key: checkoutOptions.key,
-        order_id: checkoutOptions.order_id,
-        amount: checkoutOptions.amount,
-        one_click_checkout: checkoutOptions.one_click_checkout,
-      });
+      // console.log("=================================");
+      // console.log("MAGIC CHECKOUT FULL OPTIONS");
+      // console.log(JSON.stringify(checkoutOptions, null, 2));
+      // console.log("=================================");
+      // console.log("[Checkout] Razorpay options before opening:", {
+      //   key: checkoutOptions.key,
+      //   order_id: checkoutOptions.order_id,
+      //   amount: checkoutOptions.amount,
+      //   one_click_checkout: checkoutOptions.one_click_checkout,
+      // });
 
       // Hard-fail fast with a clear message rather than letting the SDK
       // open with undefined key/order_id (which produces the cryptic
@@ -368,16 +368,16 @@ const Checkout = () => {
         throw new Error("Razorpay order_id missing");
       }
 
-      console.log("[Checkout] Opening Razorpay Magic Checkout", {
-        orderId: checkoutOptions.order_id,
-        amount: checkoutOptions.amount,
-        currency: checkoutOptions.currency,
-      });
+      // console.log("[Checkout] Opening Razorpay Magic Checkout", {
+      //   orderId: checkoutOptions.order_id,
+      //   amount: checkoutOptions.amount,
+      //   currency: checkoutOptions.currency,
+      // });
 
       try {
         await openRazorpayCheckout(checkoutOptions);
 
-        console.log("[Checkout] Razorpay popup closed successfully");
+        // console.log("[Checkout] Razorpay popup closed successfully");
       } catch (error) {
         console.error("[Checkout] Razorpay checkout failed:", error);
 

@@ -22,18 +22,18 @@ let razorpayScriptPromise = null;
  * @throws {Error} If script fails to load
  */
 export const loadRazorpayScript = () => {
-  console.log("[RazorpayLoader] loadRazorpayScript called");
+  // console.log("[RazorpayLoader] loadRazorpayScript called");
   // If script is already loaded, return immediately
   if (window.Razorpay) {
-    console.log("[RazorpayLoader] Razorpay SDK already loaded");
+    // console.log("[RazorpayLoader] Razorpay SDK already loaded");
     return Promise.resolve();
   }
 
   // If script is already loading, return the same promise to avoid duplicate loads
   if (razorpayScriptPromise) {
-    console.log(
-      "[RazorpayLoader] Razorpay SDK is already loading; returning existing promise",
-    );
+    // console.log(
+    //   "[RazorpayLoader] Razorpay SDK is already loading; returning existing promise",
+    // );
     return razorpayScriptPromise;
   }
 
@@ -51,9 +51,9 @@ export const loadRazorpayScript = () => {
     script.type = "text/javascript";
 
     script.onload = () => {
-      console.log("[RazorpayLoader] Razorpay SDK script loaded");
+      // console.log("[RazorpayLoader] Razorpay SDK script loaded");
       if (window.Razorpay) {
-        console.log("[RazorpayLoader] window.Razorpay is available");
+        // console.log("[RazorpayLoader] window.Razorpay is available");
         resolve();
       } else {
         console.error(
@@ -138,7 +138,7 @@ export const loadRazorpayScript = () => {
  * @returns {Promise<Object>} Resolves with Razorpay payment response
  */
 export const openRazorpayCheckout = async (config) => {
-  console.log("[RazorpayLoader] openRazorpayCheckout called", config);
+  // console.log("[RazorpayLoader] openRazorpayCheckout called", config);
   // Load Razorpay script BEFORE creating the promise
   await loadRazorpayScript();
 
@@ -190,8 +190,8 @@ export const openRazorpayCheckout = async (config) => {
         // frontend stayed stuck on "Processing...". Now safeResolve is the
         // ONLY place that sets handlerCalled.
         handler: async (response) => {
-          console.log("[RazorpayLoader] Razorpay handler invoked", response);
-          console.log("Payment Success");
+          // console.log("[RazorpayLoader] Razorpay handler invoked", response);
+          // console.log("Payment Success");
 
           try {
             if (config.onSuccess) {
@@ -201,7 +201,7 @@ export const openRazorpayCheckout = async (config) => {
               await config.handler(response);
             }
             safeResolve(response);
-            console.log("Promise Resolved");
+            // console.log("Promise Resolved");
           } catch (err) {
             safeReject(err);
           }
@@ -209,7 +209,7 @@ export const openRazorpayCheckout = async (config) => {
 
         modal: {
           ondismiss: () => {
-            console.log("Payment Cancelled");
+            // console.log("Payment Cancelled");
             safeReject(new Error("Payment cancelled"));
           },
         },
@@ -291,10 +291,10 @@ export const openRazorpayCheckout = async (config) => {
         options.timeout = config.timeout;
       }
 
-      console.log(
-        "[RazorpayLoader] Initializing Razorpay checkout with options:",
-        options,
-      );
+      // console.log(
+      //   "[RazorpayLoader] Initializing Razorpay checkout with options:",
+      //   options,
+      // );
 
       const rzp = new window.Razorpay(options);
 
@@ -307,7 +307,7 @@ export const openRazorpayCheckout = async (config) => {
           "[RazorpayLoader] Razorpay payment.failed event:",
           response,
         );
-        console.log("Payment Failed");
+        // console.log("Payment Failed");
         safeReject(new Error(response.error?.description || "Payment failed"));
       });
 

@@ -7,11 +7,7 @@ import {
   Trash2,
   Loader2,
   CheckCircle2,
-  Clock,
-  XCircle,
-  Truck,
   RefreshCw,
-  Bell,
   ShieldCheck,
   ChevronRight,
   CalendarDays,
@@ -184,8 +180,8 @@ function SubscriptionCard({
   onAction,
   onNavigate,
 }) {
-  console.log("ORDER ID:", subscription.order_id);
-  console.log("RAZORPAY SUB ID:", subscription.razorpay_subscription_id);
+  // console.log("ORDER ID:", subscription.order_id);
+  // console.log("RAZORPAY SUB ID:", subscription.razorpay_subscription_id);
   const subId = subscription.razorpay_subscription_id;
   const isLoading = actionLoadingId === subId;
   const rawStatus = (subscription.subscription_status || "").toLowerCase();

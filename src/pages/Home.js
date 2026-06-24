@@ -141,7 +141,7 @@ const Home = () => {
 
   // Listen for product updates via Socket.IO
   useProductsSync((eventType, product) => {
-    console.log(`🔄 Home: Product ${eventType}`, product?.id);
+    // console.log(`🔄 Home: Product ${eventType}`, product?.id);
     // Refetch home products to stay in sync
     const refetchHomeProducts = async () => {
       try {

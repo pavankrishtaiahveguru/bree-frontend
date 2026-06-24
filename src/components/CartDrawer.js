@@ -66,10 +66,10 @@ const CartDrawer = ({ isOpen, onClose }) => {
         const data = Array.isArray(response.data) ? response.data : [];
 
         // Debug log as required by spec
-        console.log("Current Product:", primaryProduct?.name);
-        console.log("Journey Level:", primaryProduct?.journey_level);
-        console.log("Is Subscription:", primaryProduct?.is_subscription);
-        console.log("Recommended Products:", data);
+        // console.log("Current Product:", primaryProduct?.name);
+        // console.log("Journey Level:", primaryProduct?.journey_level);
+        // console.log("Is Subscription:", primaryProduct?.is_subscription);
+        // console.log("Recommended Products:", data);
 
         // Filter out anything already in the cart
         const filteredRecs = data.filter((rec) => !cartProductIds.has(rec.id));

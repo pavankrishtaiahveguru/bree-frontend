@@ -485,15 +485,16 @@ const AdminSubscriptions = () => {
                   // ── Debug log — visible in browser DevTools console ───────
                   // Helps confirm what the backend is actually sending and
                   // what the UI has resolved the display status to.
-                  console.log("[ADMIN SUB STATUS]", {
-                    subscriptionId: subscription.id,
-                    subscriptionStatus:
-                      subscription.subscriptionStatus ||
-                      subscription.subscription_status,
-                    orderStatus:
-                      subscription.orderStatus || subscription.order_status,
-                    displayStatus,
-                  });
+                  
+                  // console.log("[ADMIN SUB STATUS]", {
+                  //   subscriptionId: subscription.id,
+                  //   subscriptionStatus:
+                  //     subscription.subscriptionStatus ||
+                  //     subscription.subscription_status,
+                  //   orderStatus:
+                  //     subscription.orderStatus || subscription.order_status,
+                  //   displayStatus,
+                  // });
 
                   return (
                     <tr

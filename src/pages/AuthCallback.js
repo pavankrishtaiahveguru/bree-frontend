@@ -15,22 +15,22 @@ const AuthCallback = () => {
     hasProcessed.current = true;
 
     const hash = location.hash?.startsWith('#') ? location.hash.slice(1) : location.hash || '';
-    console.log('AuthCallback hash:', hash);
+    // console.log('AuthCallback hash:', hash);
     const params = new URLSearchParams(hash);
     const sessionId = params.get('session_id');
-    console.log('AuthCallback sessionId:', sessionId);
+    // console.log('AuthCallback sessionId:', sessionId);
 
     if (!sessionId) {
-      console.log('No session_id found, redirecting home');
+      // console.log('No session_id found, redirecting home');
       navigate('/', { replace: true });
       return;
     }
 
     const process = async () => {
       try {
-        console.log('Exchanging session...');
+        // console.log('Exchanging session...');
         const userData = await exchangeSession(sessionId);
-        console.log('Session exchanged successfully:', userData);
+        // console.log('Session exchanged successfully:', userData);
         toast.success(`Welcome, ${userData.name}!`);
         window.history.replaceState(null, '', '/');
         navigate('/', { replace: true });
