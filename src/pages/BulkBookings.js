@@ -1,5 +1,5 @@
 import { useState } from "react";
-import axios from "axios";
+import axios from "@/lib/api";
 import { toast } from "sonner";
 
 export default function BulkBookings() {
@@ -38,12 +38,7 @@ export default function BulkBookings() {
     try {
       setLoading(true);
 
-      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
-
-      const response = await axios.post(
-        `${API_URL}/api/bulk-bookings`,
-        formData,
-      );
+      const response = await axios.post("/api/bulk-bookings", formData);
 
       toast.success(
         response.data.message || "Quote request submitted successfully",

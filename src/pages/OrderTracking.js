@@ -14,9 +14,7 @@ const formatStatusLabel = (status) => {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
-const API = `${
-  process.env.REACT_APP_BACKEND_URL || "http://localhost:4000"
-}/api`;
+const API = "/api";
 
 const OrderTracking = () => {
   const { id } = useParams();

@@ -16,9 +16,7 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import axios from "@/lib/api";
 import { toast } from "sonner";
 
-const API = `${
-  process.env.REACT_APP_BACKEND_URL || "http://localhost:4000"
-}/api/admin`;
+const API = "/api/admin";
 
 const AUTH = () => ({
   withCredentials: true,
@@ -43,13 +41,17 @@ export default function TestimonialsAdmin() {
         (res.data || []).map((item) => ({
           ...item,
           review: item.text,
-          status: item.status || (item.approved ? 'approved' : 'pending'),
+          status: item.status || (item.approved ? "approved" : "pending"),
           date: item.created_at,
-        }))
+        })),
       );
     } catch (err) {
-      console.error('Unable to fetch testimonials', err);
-      setError(err?.response?.data?.message || err.message || 'Unable to fetch testimonials.');
+      console.error("Unable to fetch testimonials", err);
+      setError(
+        err?.response?.data?.message ||
+          err.message ||
+          "Unable to fetch testimonials.",
+      );
       setTestimonials([]);
     } finally {
       setLoading(false);
@@ -63,9 +65,9 @@ export default function TestimonialsAdmin() {
       fetchTestimonials();
     };
 
-    window.addEventListener('testimonial:submitted', handleNewTestimonial);
+    window.addEventListener("testimonial:submitted", handleNewTestimonial);
     return () => {
-      window.removeEventListener('testimonial:submitted', handleNewTestimonial);
+      window.removeEventListener("testimonial:submitted", handleNewTestimonial);
     };
   }, [fetchTestimonials]);
 
@@ -76,11 +78,13 @@ export default function TestimonialsAdmin() {
     try {
       setLoading(true);
       await axios.patch(`${API}/testimonials/${id}/approve`, {}, AUTH());
-      toast.success('Testimonial approved');
+      toast.success("Testimonial approved");
       await fetchTestimonials();
     } catch (error) {
-      console.error('Approve failed', error);
-      toast.error(error?.response?.data?.message || 'Unable to approve testimonial.');
+      console.error("Approve failed", error);
+      toast.error(
+        error?.response?.data?.message || "Unable to approve testimonial.",
+      );
     } finally {
       setLoading(false);
     }
@@ -90,27 +94,32 @@ export default function TestimonialsAdmin() {
     try {
       setLoading(true);
       await axios.patch(`${API}/testimonials/${id}/reject`, {}, AUTH());
-      toast.success('Testimonial rejected');
+      toast.success("Testimonial rejected");
       await fetchTestimonials();
     } catch (error) {
-      console.error('Reject failed', error);
-      toast.error(error?.response?.data?.message || 'Unable to reject testimonial.');
+      console.error("Reject failed", error);
+      toast.error(
+        error?.response?.data?.message || "Unable to reject testimonial.",
+      );
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this testimonial? This cannot be undone.')) return;
+    if (!window.confirm("Delete this testimonial? This cannot be undone."))
+      return;
 
     try {
       setLoading(true);
       await axios.delete(`${API}/testimonials/${id}`, AUTH());
-      toast.success('Testimonial deleted');
+      toast.success("Testimonial deleted");
       await fetchTestimonials();
     } catch (error) {
-      console.error('Delete failed', error);
-      toast.error(error?.response?.data?.message || 'Unable to delete testimonial.');
+      console.error("Delete failed", error);
+      toast.error(
+        error?.response?.data?.message || "Unable to delete testimonial.",
+      );
     } finally {
       setLoading(false);
     }

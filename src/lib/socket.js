@@ -1,19 +1,31 @@
-import io from 'socket.io-client';
+import io from "socket.io-client";
 
 let socket = null;
 
+const resolveBackendUrl = () => {
+  const configured =
+    process.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_API_URL || "";
+  if (configured) {
+    return configured.replace(/\/api\/?$/, "");
+  }
+
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin;
+  }
+
+  return "";
+};
+
 export const getSocket = () => {
   if (!socket) {
-    const backendUrl =
-      process.env.REACT_APP_BACKEND_URL ||
-      'http://localhost:4000';
+    const backendUrl = resolveBackendUrl();
 
     socket = io(backendUrl, {
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       reconnectionAttempts: 5,
-      transports: ['websocket']
+      transports: ["websocket"],
     });
 
     // socket.on('connect', () => {
@@ -24,8 +36,8 @@ export const getSocket = () => {
     //   console.log('❌ Socket disconnected');
     // });
 
-    socket.on('connect_error', (err) => {
-      console.error('Socket Error:', err.message);
+    socket.on("connect_error", (err) => {
+      console.error("Socket Error:", err.message);
     });
   }
 

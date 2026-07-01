@@ -23,11 +23,9 @@ import { toast } from "sonner";
 
 import AdminLayout from "@/components/admin/AdminLayout";
 
-import axios from "axios";
+import axios from "@/lib/api";
 
-const API = `${
-  process.env.REACT_APP_BACKEND_URL || "http://localhost:4000"
-}/api/admin`;
+const API = "/api/admin";
 
 const AUTH = () => ({
   withCredentials: true,

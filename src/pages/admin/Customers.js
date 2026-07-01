@@ -18,9 +18,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 import AdminLayout from "@/components/admin/AdminLayout";
-import axios from "axios";
+import axios from "@/lib/api";
 
-const API = `${process.env.REACT_APP_BACKEND_URL || "http://localhost:4000"}/api/admin`;
+const API = "/api/admin";
 const AUTH = () => ({ withCredentials: true });
 
 const Customers = () => {

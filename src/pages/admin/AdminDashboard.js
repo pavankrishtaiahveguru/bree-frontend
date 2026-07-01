@@ -11,10 +11,10 @@ import {
   FileText,
 } from "lucide-react";
 import AdminLayout from "@/components/admin/AdminLayout";
-import axios from "axios";
+import axios from "@/lib/api";
 import useOrdersSync from "@/hooks/useOrdersSync";
 
-const API = `${process.env.REACT_APP_BACKEND_URL || "http://localhost:4000"}/api/admin`;
+const API = "/api/admin";
 
 // Animated counter hook
 const useCounter = (end, duration = 1500, started = false) => {

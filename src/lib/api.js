@@ -1,6 +1,15 @@
 import axios from "axios";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
+const normalizeBaseUrl = (value) => {
+  if (!value) return "";
+  const trimmed = String(value).trim();
+  if (!trimmed) return "";
+  return trimmed.replace(/\/api\/?$/, "").replace(/\/$/, "");
+};
+
+const BACKEND_URL = normalizeBaseUrl(
+  process.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_API_URL || "",
+);
 
 axios.defaults.baseURL = BACKEND_URL;
 axios.defaults.withCredentials = true;

@@ -17,11 +17,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import AdminLayout from "@/components/admin/AdminLayout";
-import axios from "axios";
+import axios from "@/lib/api";
 import { toast } from "sonner";
 import useOrdersSync from "@/hooks/useOrdersSync";
 
-const API = `${process.env.REACT_APP_BACKEND_URL || "http://localhost:4000"}/api/admin`;
+const API = "/api/admin";
 const AUTH = () => ({ withCredentials: true });
 const PAGE_SIZE = 10;
 
@@ -689,7 +689,7 @@ const Orders = () => {
       setChecked([]);
 
       try {
-        const adminApi = `${process.env.REACT_APP_BACKEND_URL || "http://localhost:4000"}/api/admin`;
+        const adminApi = API;
         if (ids.length === 1) {
           const res = await axios.patch(
             `${adminApi}/orders/${ids[0]}/status`,

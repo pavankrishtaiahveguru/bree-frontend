@@ -20,7 +20,7 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
-const API = `${process.env.REACT_APP_BACKEND_URL || "http://localhost:4000"}/api/admin`;
+const API = "/api/admin";
 
 // Status configuration
 const STATUS_CONFIG = {
